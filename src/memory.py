@@ -122,7 +122,7 @@ class EpisodicMemory:
             ep_words = set(ep["words"])
             hdc = similarity(ep["vec"], q_vec)
             overlap = len(ep_words & q_words) / max(len(q_words), 1)
-            score = (0.4 * hdc + 0.6 * overlap) * ep["strength"]
+            score = 0.4 * hdc + 0.6 * overlap
             scored.append((ep, score))
         scored.sort(key=lambda x: -x[1])
         return scored[:top_k]
