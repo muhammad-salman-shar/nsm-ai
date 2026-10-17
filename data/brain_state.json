@@ -1,0 +1,931 @@
+{
+  "version": 1,
+  "saved_at": 1792255854.3678648,
+  "turn": 37,
+  "max_depth": 5,
+  "definitions": {
+    "mango": "Mango is fruit",
+    "nickname": "Remember your nickname is Salman",
+    "neurasamu": "NeuraSaMu is agi research lab",
+    "research": "To find about something",
+    "something": "Many things",
+    "human": "Human is species",
+    "species": "Something that exists in our planet",
+    "exists": "Happen",
+    "happen": "To be in planet",
+    "living": "Living means to stay",
+    "taste": "Mango taste is sweet"
+  },
+  "relations": {
+    "IS|mango": {
+      "fruit": {
+        "count": 1,
+        "first_seen": 1792254292.1110308,
+        "last_seen": 1792254292.1110308,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|nickname": {
+      "salman": {
+        "count": 1,
+        "first_seen": 1792254394.2885723,
+        "last_seen": 1792254394.2885723,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|neurasamu": {
+      "lab": {
+        "count": 1,
+        "first_seen": 1792254465.8919237,
+        "last_seen": 1792254465.8919237,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|human": {
+      "species": {
+        "count": 1,
+        "first_seen": 1792254677.7781854,
+        "last_seen": 1792254677.7781854,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|living": {
+      "stay": {
+        "count": 1,
+        "first_seen": 1792254758.6326206,
+        "last_seen": 1792254758.6326206,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|taste": {
+      "sweet": {
+        "count": 1,
+        "first_seen": 1792255842.4260197,
+        "last_seen": 1792255842.4260197,
+        "superseded": false,
+        "source": "user"
+      }
+    }
+  },
+  "lexicon": {
+    "apple": {
+      "count": 1,
+      "contexts": []
+    },
+    "red": {
+      "count": 1,
+      "contexts": []
+    },
+    "fruit": {
+      "count": 1,
+      "contexts": []
+    },
+    "round": {
+      "count": 1,
+      "contexts": []
+    },
+    "sweet": {
+      "count": 1,
+      "contexts": []
+    },
+    "banana": {
+      "count": 1,
+      "contexts": []
+    },
+    "yellow": {
+      "count": 1,
+      "contexts": []
+    },
+    "long": {
+      "count": 1,
+      "contexts": []
+    },
+    "cherry": {
+      "count": 1,
+      "contexts": []
+    },
+    "small": {
+      "count": 1,
+      "contexts": []
+    },
+    "cat": {
+      "count": 1,
+      "contexts": []
+    },
+    "animal": {
+      "count": 1,
+      "contexts": []
+    },
+    "furry": {
+      "count": 1,
+      "contexts": []
+    },
+    "meow": {
+      "count": 1,
+      "contexts": []
+    },
+    "dog": {
+      "count": 1,
+      "contexts": []
+    },
+    "bark": {
+      "count": 1,
+      "contexts": []
+    },
+    "sun": {
+      "count": 1,
+      "contexts": []
+    },
+    "bright": {
+      "count": 1,
+      "contexts": []
+    },
+    "warm": {
+      "count": 1,
+      "contexts": []
+    },
+    "day": {
+      "count": 1,
+      "contexts": []
+    },
+    "moon": {
+      "count": 1,
+      "contexts": []
+    },
+    "night": {
+      "count": 1,
+      "contexts": []
+    },
+    "cold": {
+      "count": 1,
+      "contexts": []
+    },
+    "fire": {
+      "count": 1,
+      "contexts": []
+    },
+    "hot": {
+      "count": 1,
+      "contexts": []
+    },
+    "danger": {
+      "count": 1,
+      "contexts": []
+    },
+    "water": {
+      "count": 1,
+      "contexts": []
+    },
+    "wet": {
+      "count": 1,
+      "contexts": []
+    },
+    "drink": {
+      "count": 1,
+      "contexts": []
+    },
+    "food": {
+      "count": 1,
+      "contexts": []
+    },
+    "eat": {
+      "count": 1,
+      "contexts": []
+    },
+    "energy": {
+      "count": 1,
+      "contexts": []
+    },
+    "hurt": {
+      "count": 1,
+      "contexts": []
+    },
+    "pain": {
+      "count": 1,
+      "contexts": []
+    },
+    "hi": {
+      "count": 1,
+      "contexts": []
+    },
+    "what": {
+      "count": 1,
+      "contexts": []
+    },
+    "is": {
+      "count": 1,
+      "contexts": []
+    },
+    "your": {
+      "count": 1,
+      "contexts": []
+    },
+    "name": {
+      "count": 1,
+      "contexts": []
+    },
+    "who": {
+      "count": 1,
+      "contexts": []
+    },
+    "built": {
+      "count": 1,
+      "contexts": []
+    },
+    "you": {
+      "count": 1,
+      "contexts": []
+    },
+    "mango": {
+      "count": 1,
+      "contexts": []
+    },
+    "nickname": {
+      "count": 1,
+      "contexts": []
+    },
+    "salman": {
+      "count": 1,
+      "contexts": []
+    },
+    "remember": {
+      "count": 1,
+      "contexts": []
+    },
+    "can": {
+      "count": 1,
+      "contexts": []
+    },
+    "that": {
+      "count": 1,
+      "contexts": []
+    },
+    "are": {
+      "count": 1,
+      "contexts": []
+    },
+    "by": {
+      "count": 1,
+      "contexts": []
+    },
+    "neurasamu": {
+      "count": 1,
+      "contexts": []
+    },
+    "agi": {
+      "count": 1,
+      "contexts": []
+    },
+    "lab": {
+      "count": 1,
+      "contexts": []
+    },
+    "research": {
+      "count": 1,
+      "contexts": []
+    },
+    "to": {
+      "count": 1,
+      "contexts": []
+    },
+    "find": {
+      "count": 1,
+      "contexts": []
+    },
+    "about": {
+      "count": 1,
+      "contexts": []
+    },
+    "something": {
+      "count": 1,
+      "contexts": []
+    },
+    "many": {
+      "count": 1,
+      "contexts": []
+    },
+    "things": {
+      "count": 1,
+      "contexts": []
+    },
+    "my": {
+      "count": 1,
+      "contexts": []
+    },
+    "i": {
+      "count": 1,
+      "contexts": []
+    },
+    "am": {
+      "count": 1,
+      "contexts": []
+    },
+    "human": {
+      "count": 1,
+      "contexts": []
+    },
+    "species": {
+      "count": 1,
+      "contexts": []
+    },
+    "exists": {
+      "count": 1,
+      "contexts": []
+    },
+    "happen": {
+      "count": 1,
+      "contexts": []
+    },
+    "be": {
+      "count": 1,
+      "contexts": []
+    },
+    "in": {
+      "count": 1,
+      "contexts": []
+    },
+    "where": {
+      "count": 1,
+      "contexts": []
+    },
+    "we": {
+      "count": 1,
+      "contexts": []
+    },
+    "live": {
+      "count": 1,
+      "contexts": []
+    },
+    "living": {
+      "count": 1,
+      "contexts": []
+    },
+    "earth": {
+      "count": 1,
+      "contexts": []
+    },
+    "means": {
+      "count": 1,
+      "contexts": []
+    },
+    "stay": {
+      "count": 1,
+      "contexts": []
+    },
+    "our": {
+      "count": 1,
+      "contexts": []
+    },
+    "planet": {
+      "count": 1,
+      "contexts": []
+    },
+    "the": {
+      "count": 1,
+      "contexts": []
+    },
+    "taste": {
+      "count": 1,
+      "contexts": []
+    },
+    "of": {
+      "count": 1,
+      "contexts": []
+    }
+  },
+  "episodes": [
+    {
+      "t": 1792254250.0168571,
+      "text": "Hi",
+      "mood": "curious",
+      "response": "Hello! Wanna talk about something fun?",
+      "strength": 0.70625,
+      "words": [
+        "hi"
+      ]
+    },
+    {
+      "t": 1792254259.8579526,
+      "text": "What is your name",
+      "mood": "curious",
+      "response": "I'm NSM VB. Wanna know more about me?",
+      "strength": 0.711875,
+      "words": [
+        "what",
+        "is",
+        "your",
+        "name"
+      ]
+    },
+    {
+      "t": 1792254269.9698076,
+      "text": "Who built you",
+      "mood": "curious",
+      "response": "I'm NSM VB. Wanna know more about me?",
+      "strength": 0.7169375,
+      "words": [
+        "who",
+        "built",
+        "you"
+      ]
+    },
+    {
+      "t": 1792254282.2278755,
+      "text": "What is mango",
+      "mood": "curious",
+      "response": "[asked about 'mango']",
+      "strength": 0.5,
+      "words": [
+        "what",
+        "is",
+        "mango"
+      ]
+    },
+    {
+      "t": 1792254292.1168149,
+      "text": "learned mango: Mango is fruit",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "mango:",
+        "mango",
+        "is",
+        "fruit"
+      ]
+    },
+    {
+      "t": 1792254292.122497,
+      "text": "What is mango",
+      "mood": "happy",
+      "response": "Got it! mango means: Mango is fruit",
+      "strength": 0.779719375,
+      "words": [
+        "what",
+        "is",
+        "mango"
+      ]
+    },
+    {
+      "t": 1792254299.973322,
+      "text": "What is mango",
+      "mood": "happy",
+      "response": "mango means: Mango is fruit",
+      "strength": 0.7717474375,
+      "words": [
+        "what",
+        "is",
+        "mango"
+      ]
+    },
+    {
+      "t": 1792254394.291199,
+      "text": "Remember your nickname is Salman",
+      "mood": "happy",
+      "response": "Got it! I learned that nickname is salman.",
+      "strength": 0.76457269375,
+      "words": [
+        "remember",
+        "your",
+        "nickname",
+        "is",
+        "salman"
+      ]
+    },
+    {
+      "t": 1792254404.4942904,
+      "text": "What is your nickname",
+      "mood": "happy",
+      "response": "nickname means: Remember your nickname is Salman",
+      "strength": 0.785115424375,
+      "words": [
+        "what",
+        "is",
+        "your",
+        "nickname"
+      ]
+    },
+    {
+      "t": 1792254428.15191,
+      "text": "Can you remember",
+      "mood": "happy",
+      "response": "Fun question! I'm not sure but I like it.",
+      "strength": 0.7766038819375001,
+      "words": [
+        "can",
+        "you",
+        "remember"
+      ]
+    },
+    {
+      "t": 1792254444.9201713,
+      "text": "Remember that you are built by NeuraSaMu",
+      "mood": "happy",
+      "response": "[asked about 'neurasamu']",
+      "strength": 0.5,
+      "words": [
+        "remember",
+        "that",
+        "you",
+        "are",
+        "built",
+        "by",
+        "neurasamu"
+      ]
+    },
+    {
+      "t": 1792254465.9029224,
+      "text": "learned neurasamu: NeuraSaMu is agi research lab",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "neurasamu:",
+        "neurasamu",
+        "is",
+        "agi",
+        "research",
+        "lab"
+      ]
+    },
+    {
+      "t": 1792254479.3252902,
+      "text": "learned research: To find about something",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "research:",
+        "to",
+        "find",
+        "about",
+        "something"
+      ]
+    },
+    {
+      "t": 1792254494.0951407,
+      "text": "learned something: Many things",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "something:",
+        "many",
+        "things"
+      ]
+    },
+    {
+      "t": 1792254508.1214619,
+      "text": "What is NeuraSaMu",
+      "mood": "happy",
+      "response": "neurasamu means: NeuraSaMu is agi research lab",
+      "strength": 0.8754278262452744,
+      "words": [
+        "what",
+        "is",
+        "neurasamu"
+      ]
+    },
+    {
+      "t": 1792254531.2561786,
+      "text": "What is your nickname",
+      "mood": "happy",
+      "response": "nickname means: Remember your nickname is Salman",
+      "strength": 0.8578850436207469,
+      "words": [
+        "what",
+        "is",
+        "your",
+        "nickname"
+      ]
+    },
+    {
+      "t": 1792254544.7984383,
+      "text": "What is mango",
+      "mood": "happy",
+      "response": "mango means: Mango is fruit",
+      "strength": 0.8420965392586722,
+      "words": [
+        "what",
+        "is",
+        "mango"
+      ]
+    },
+    {
+      "t": 1792254609.309567,
+      "text": "Remember my name is Salman",
+      "mood": "happy",
+      "response": "I remember you said 'Remember your nickname is Salman'. That's cool!",
+      "strength": 0.827886885332805,
+      "words": [
+        "remember",
+        "my",
+        "name",
+        "is",
+        "salman"
+      ]
+    },
+    {
+      "t": 1792254624.5566893,
+      "text": "What is my name",
+      "mood": "happy",
+      "response": "I remember you said 'What is your name'. Fun question! I'm not sure but I like it.",
+      "strength": 0.8150981967995246,
+      "words": [
+        "what",
+        "is",
+        "my",
+        "name"
+      ]
+    },
+    {
+      "t": 1792254637.2408612,
+      "text": "My name is Salman",
+      "mood": "happy",
+      "response": "I remember you said 'Remember my name is Salman'. Nice!",
+      "strength": 0.803588377119572,
+      "words": [
+        "my",
+        "name",
+        "is",
+        "salman"
+      ]
+    },
+    {
+      "t": 1792254647.664705,
+      "text": "I am salman",
+      "mood": "happy",
+      "response": "Oh no. Want to talk about it?",
+      "strength": 0.7932295394076148,
+      "words": [
+        "i",
+        "am",
+        "salman"
+      ]
+    },
+    {
+      "t": 1792254655.432743,
+      "text": "What is my name",
+      "mood": "happy",
+      "response": "I remember you said 'What is my name'. Fun question! I'm not sure but I like it.",
+      "strength": 0.7839065854668533,
+      "words": [
+        "what",
+        "is",
+        "my",
+        "name"
+      ]
+    },
+    {
+      "t": 1792254664.0095866,
+      "text": "I am human",
+      "mood": "happy",
+      "response": "[asked about 'human']",
+      "strength": 0.5,
+      "words": [
+        "i",
+        "am",
+        "human"
+      ]
+    },
+    {
+      "t": 1792254677.7799695,
+      "text": "learned human: Human is species",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "human:",
+        "human",
+        "is",
+        "species"
+      ]
+    },
+    {
+      "t": 1792254698.3691568,
+      "text": "learned species: Something that exists in our planet",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "species:",
+        "something",
+        "that",
+        "exists",
+        "in",
+        "our",
+        "planet"
+      ]
+    },
+    {
+      "t": 1792254707.2672243,
+      "text": "learned exists: Happen",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "exists:",
+        "happen"
+      ]
+    },
+    {
+      "t": 1792254715.7965872,
+      "text": "learned happen: To be in planet",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "happen:",
+        "to",
+        "be",
+        "in",
+        "planet"
+      ]
+    },
+    {
+      "t": 1792254726.195672,
+      "text": "Where we live",
+      "mood": "happy",
+      "response": "I don't know that yet but I'm learning!",
+      "strength": 0.9112159996870901,
+      "words": [
+        "where",
+        "we",
+        "live"
+      ]
+    },
+    {
+      "t": 1792254743.9047892,
+      "text": "We are living in earth",
+      "mood": "happy",
+      "response": "[asked about 'living']",
+      "strength": 0.5,
+      "words": [
+        "we",
+        "are",
+        "living",
+        "in",
+        "earth"
+      ]
+    },
+    {
+      "t": 1792254758.6409738,
+      "text": "learned living: Living means to stay",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "living:",
+        "living",
+        "means",
+        "to",
+        "stay"
+      ]
+    },
+    {
+      "t": 1792254767.1356788,
+      "text": "What is our planet",
+      "mood": "happy",
+      "response": "I remember you said 'What is my name'. Fun question! I'm not sure but I like it.",
+      "strength": 0.9133764637718886,
+      "words": [
+        "what",
+        "is",
+        "our",
+        "planet"
+      ]
+    },
+    {
+      "t": 1792254776.1188958,
+      "text": "Earth",
+      "mood": "happy",
+      "response": "I remember you said 'We are living in earth'. I don't know that yet but I'm learning!",
+      "strength": 0.8920388173946998,
+      "words": [
+        "earth"
+      ]
+    },
+    {
+      "t": 1792255772.7423215,
+      "text": "Hi",
+      "mood": "happy",
+      "response": "I remember you said 'Hi'. Hello hello! I'm happy today!",
+      "strength": 0.8728349356552298,
+      "words": [
+        "hi"
+      ]
+    },
+    {
+      "t": 1792255784.3270617,
+      "text": "What is your name",
+      "mood": "happy",
+      "response": "I'm NSM VB! I'm 10 years old!",
+      "strength": 0.8555514420897068,
+      "words": [
+        "what",
+        "is",
+        "your",
+        "name"
+      ]
+    },
+    {
+      "t": 1792255796.4119205,
+      "text": "What is mango",
+      "mood": "happy",
+      "response": "mango means: Mango is fruit",
+      "strength": 0.839996297880736,
+      "words": [
+        "what",
+        "is",
+        "mango"
+      ]
+    },
+    {
+      "t": 1792255807.3305056,
+      "text": "What is the taste of mango",
+      "mood": "happy",
+      "response": "[asked about 'taste']",
+      "strength": 0.5,
+      "words": [
+        "what",
+        "is",
+        "the",
+        "taste",
+        "of",
+        "mango"
+      ]
+    },
+    {
+      "t": 1792255842.4283414,
+      "text": "learned taste: Mango taste is sweet",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "taste:",
+        "mango",
+        "taste",
+        "is",
+        "sweet"
+      ]
+    },
+    {
+      "t": 1792255842.4360027,
+      "text": "What is the taste of mango",
+      "mood": "happy",
+      "response": "Got it! taste means: Mango taste is sweet",
+      "strength": 0.8793970012833963,
+      "words": [
+        "what",
+        "is",
+        "the",
+        "taste",
+        "of",
+        "mango"
+      ]
+    },
+    {
+      "t": 1792255854.3669631,
+      "text": "What is your nickname",
+      "mood": "happy",
+      "response": "nickname means: Remember your nickname is Salman",
+      "strength": 0.8614573011550566,
+      "words": [
+        "what",
+        "is",
+        "your",
+        "nickname"
+      ]
+    }
+  ],
+  "affect": {
+    "drives": {
+      "curiosity": 59.0,
+      "attention": 78,
+      "social_reward": 97.0,
+      "confusion": 0.0,
+      "satisfaction": 98.5,
+      "bonding": 99.0
+    },
+    "hormones": {
+      "dopamine": 69.06231420791019,
+      "oxytocin": 94.0,
+      "cortisol": 39.594488808191095
+    }
+  }
+}

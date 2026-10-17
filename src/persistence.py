@@ -74,6 +74,7 @@ def to_dict(brain):
         "turn": brain.turn,
         "max_depth": brain.max_depth,
         "definitions": dict(brain.definitions),
+        "facts": dict(brain.fact_store.facts),
         "relations": _serialize_relations(brain.relations),
         "lexicon": _serialize_lexicon(brain.lexicon),
         "episodes": [
@@ -92,6 +93,8 @@ def from_dict(brain, data):
         return False
     brain.turn = data.get("turn", 0)
     brain.definitions = dict(data.get("definitions", {}))
+    for k, v in data.get("facts", {}).items():
+        brain.fact_store.facts[k] = v
     _deserialize_relations(data.get("relations", {}), brain.relations)
     _deserialize_lexicon(data.get("lexicon", {}), brain.lexicon)
 

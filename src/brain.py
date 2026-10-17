@@ -6,6 +6,8 @@ from src.perceptron import Perceptron, TRAINING_DATA
 from src.language import Language
 from src.relations import (extract, parse_query, RelationStore,
                            CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL)
+from src import persistence
+from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
@@ -91,7 +93,8 @@ def _is_question_text(text):
 
 class Brain:
     def __init__(self, perceptron_path="src/perceptron.npz",
-                 max_depth=DEFAULT_MAX_DEPTH):
+                 max_depth=DEFAULT_MAX_DEPTH,
+                 auto_save_path=None):
         self.affect = Affect()
         self.personality = Personality
         self.lexicon = Lexicon()
@@ -99,6 +102,7 @@ class Brain:
         self.perceptron = Perceptron()
         self.lang = Language(seed=7)
         self.relations = RelationStore()
+        self.fact_store = FactStore()
         self.max_depth = min(int(max_depth), HARD_MAX_DEPTH)
         self._boot_perceptron(perceptron_path)
         self._seed_lexicon("data/stimuli.txt")
@@ -107,6 +111,9 @@ class Brain:
         self.definitions = {}
         self.ask_depth = 0
         self.asked_words = set()
+        self.auto_save_path = auto_save_path
+        if auto_save_path:
+            persistence.load(self, auto_save_path)
 
     def _boot_perceptron(self, path):
         try:
@@ -267,6 +274,21 @@ class Brain:
         return None
 
     def _answer_question(self, text):
+        fkey = fact_query(text)
+        if fkey:
+            val = self.fact_store.get(fkey)
+            response = (format_answer(fkey, val) if val is not None
+                        else f"I don't know your {fkey} yet. Tell me?")
+            wq = _words(text)
+            self._attend(wq)
+            self._bind_words(wq)
+            self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
+            self.affect.tick()
+            return {
+                "turn": self.turn, "text": text, "intent": "question",
+                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                "response": response,
+            }
         words, intent, conf = self._perceive(text)
         self._attend(words)
         lookup = self._lookup_definition(text)
@@ -352,7 +374,11 @@ class Brain:
 
     def observe(self, text):
         self.turn += 1
+        result = self._observe_inner(text)
+        self._maybe_save()
+        return result
 
+    def _observe_inner(self, text):
         if self.pending and _is_question_text(text):
             self.pending = None
             self._reset_chain()
@@ -360,6 +386,41 @@ class Brain:
 
         if self.pending:
             return self._resolve_pending(text)
+
+        # L2: Fact queries (what is my name?)
+        fkey = fact_query(text)
+        if fkey:
+            val = self.fact_store.get(fkey)
+            response = (format_answer(fkey, val) if val is not None
+                        else f"I don't know your {fkey} yet. Tell me?")
+            wq = _words(text)
+            self._attend(wq)
+            self._bind_words(wq)
+            self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
+            self.affect.tick()
+            return {
+                "turn": self.turn, "text": text, "intent": "question",
+                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                "response": response,
+            }
+
+        # L2: Fact statements (my name is salman)
+        fact = extract_fact(text)
+        if fact:
+            key, val = fact
+            self.fact_store.set(key, val)
+            response = f"Got it! I'll remember your {key} is {val}."
+            ws = _words(text)
+            self._attend(ws)
+            self._bind_words(ws)
+            self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
+            self.affect.event("rewarded", intensity=0.6)
+            self.affect.tick()
+            return {
+                "turn": self.turn, "text": text, "intent": "statement",
+                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                "response": response,
+            }
 
         learned_resp = self._try_learn_relation(text)
         if learned_resp:
@@ -420,6 +481,13 @@ class Brain:
             "response": response,
         }
 
+    def _maybe_save(self):
+        if self.auto_save_path:
+            try:
+                persistence.save(self, self.auto_save_path)
+            except OSError:
+                pass
+
     def state(self):
         return {
             "turn": self.turn,
@@ -428,6 +496,7 @@ class Brain:
             "vocab": len(self.lexicon.words),
             "definitions": len(self.definitions),
             "relations": self.relations.count(),
+            "facts": len(self.fact_store.facts),
             "pending": self.pending,
             "max_depth": self.max_depth,
             "ask_depth": self.ask_depth,
