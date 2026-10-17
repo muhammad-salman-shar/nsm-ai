@@ -78,6 +78,15 @@ class Lexicon:
         scored.sort(key=lambda x: -x[1])
         return scored[:top_k]
 
+    def correct(self, word, old_context, new_context):
+        w = word.lower().strip()
+        oc = old_context.lower().strip()
+        if w in self.words:
+            self.words[w]["relations"].pop(oc, None)
+            if oc in self.words:
+                self.words[oc]["relations"].pop(w, None)
+        self.see(word, [new_context])
+
     def has(self, word):
         return word.lower().strip() in self.words
 
