@@ -37,3 +37,25 @@ class TestRecallGating(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+class TestPendingCancel(unittest.TestCase):
+    def setUp(self):
+        self.b = Brain(auto_save_path=None)
+
+    def test_greeting_cancels_pending(self):
+        self.b.observe("what is zorblax")
+        self.assertIsNotNone(self.b.pending)
+        r = self.b.observe("hello")
+        self.assertIsNone(self.b.pending)
+        self.assertNotIn("zorblax means", r["response"].lower())
+        self.assertIn("hello", r["response"].lower())
+
+    def test_skip_cancels_pending(self):
+        self.b.observe("what is zorblax")
+        r = self.b.observe("skip")
+        self.assertIsNone(self.b.pending)
+
+    def test_valid_definition_still_works(self):
+        self.b.observe("what is zorblax")
+        r = self.b.observe("zorblax is an animal")
+        self.assertIn("zorblax", self.b.definitions)

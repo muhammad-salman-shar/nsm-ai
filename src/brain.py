@@ -26,6 +26,8 @@ _GRAMMAR = {
     "this","that","these","those","there","here",
     "not","no","yes","ok","okay","sure","please",
     "hi","hello","hey","bye","goodbye","greetings",
+    "thanks","thank","nevermind","never","skip","cancel",
+    "forget","stop","quit","whatever","nothing","later","fine",
     "one","two","three","four","five","six","seven","eight","nine","ten","zero",
     "plus","minus","times","multiplied","divided",
 }
@@ -92,6 +94,40 @@ FUNCTION_WORDS = {
 
 def _content_words(text):
     return {w for w in _words(text) if w not in FUNCTION_WORDS and len(w) >= 3}
+
+_CANCEL_WORDS = {
+    "hi","hello","hey","greetings","yo","sup","bye","goodbye",
+    "thanks","thank","ok","okay","yes","no","nevermind","never",
+    "skip","cancel","forget","stop","quit","whatever","nothing",
+    "later","fine",
+}
+
+def _is_cancel_or_greeting(text):
+    words = _words(text)
+    if not words:
+        return False
+    if len(words) == 1 and words[0] in _CANCEL_WORDS:
+        return True
+    if len(words) <= 2 and all(w in _CANCEL_WORDS for w in words):
+        return True
+    return False
+
+_CANCEL_WORDS = {
+    "hi","hello","hey","greetings","yo","sup","bye","goodbye",
+    "thanks","thank","ok","okay","yes","no","nevermind","never",
+    "skip","cancel","forget","stop","quit","whatever","nothing",
+    "later","fine",
+}
+
+def _is_cancel_or_greeting(text):
+    words = _words(text)
+    if not words:
+        return False
+    if len(words) == 1 and words[0] in _CANCEL_WORDS:
+        return True
+    if len(words) <= 2 and all(w in _CANCEL_WORDS for w in words):
+        return True
+    return False
 
 
 def _words(text):
@@ -429,6 +465,11 @@ class Brain:
             self.pending = None
             self._reset_chain()
             return self._answer_question(text)
+
+        if self.pending and _is_cancel_or_greeting(text):
+            self.pending = None
+            self._reset_chain()
+            # fall through to normal processing
 
         if self.pending:
             return self._resolve_pending(text)
