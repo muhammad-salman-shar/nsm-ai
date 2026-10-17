@@ -460,7 +460,55 @@ class Brain:
         self._maybe_save()
         return result
 
+    ASK_BANK = [
+        "What is your favourite food?",
+        "Do you like mangoes?",
+        "What did you do today?",
+        "Are you happy?",
+        "What is your favourite game?",
+        "Do you have a pet?",
+        "How are you feeling?",
+        "What is something interesting about you?",
+        "What do you like?",
+        "What is your favourite colour?",
+    ]
+
+    ASK_TRIGGERS = {
+        "ask me something", "ask me anything", "ask me a question",
+        "ask question", "ask me", "your question",
+    }
+
+    def _try_ask(self, text):
+        if text.lower().strip() not in self.ASK_TRIGGERS:
+            return None
+        # Priority 1: pending curiosity from past
+        if self.asked_words:
+            target = next(iter(self.asked_words))
+            return f"I'm curious — what is '{target}'? Can you teach me?"
+        # Priority 2: user facts to ask about
+        if not self.fact_store.has("name"):
+            return "What is your name? I want to remember you."
+        if not self.fact_store.has("age"):
+            return "How old are you?"
+        if not self.fact_store.has("location"):
+            return "Where do you live?"
+        # Priority 3: random from bank
+        import random
+        return random.choice(self.ASK_BANK)
+
     def _observe_inner(self, text):
+        # L2.5-B: Ask me something (highest priority, overrides pending)
+        ask_resp = self._try_ask(text)
+        if ask_resp:
+            self.affect.event("bonding_moment", intensity=0.5)
+            self.affect.tick()
+            self.episodic.store(text, self.affect.mood(), ask_resp, 0.7)
+            return {
+                "turn": self.turn, "text": text, "intent": "question",
+                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                "response": ask_resp,
+            }
+
         if self.pending and _is_question_text(text):
             self.pending = None
             self._reset_chain()
