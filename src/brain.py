@@ -77,6 +77,22 @@ def _build_stopwords():
 
 STOPWORDS = _build_stopwords()
 
+FUNCTION_WORDS = {
+    "i","you","we","they","he","she","it","me","us","them",
+    "my","your","our","their","his","her","its",
+    "am","is","are","was","were","be","been","being",
+    "a","an","the","and","or","but",
+    "do","does","did","have","has","had",
+    "to","of","in","on","at","for","with","by","from",
+    "this","that","these","those",
+    "not","no","yes","ok","okay",
+    "what","who","when","where","why","how","which",
+    "like","love","want","need","know","think","feel","said",
+}
+
+def _content_words(text):
+    return {w for w in _words(text) if w not in FUNCTION_WORDS and len(w) >= 3}
+
 
 def _words(text):
     return re.findall(r"[a-z]+", text.lower())
@@ -213,6 +229,25 @@ class Brain:
         if math is not None:
             self.affect.event("rewarded", intensity=0.5)
             return f"The answer is {math}."
+        # L2.5: what is X where X is known-but-undefined -> ask user
+        if _is_question_text(text):
+            qw = _words(text)
+            if qw and qw[0] == "what" and len(qw) >= 3:
+                target = qw[-1]
+                known_meaning = (
+                    target in self.definitions
+                    or bool(self.relations.get("IS", target))
+                )
+                if (len(target) >= 3
+                        and target not in FUNCTION_WORDS
+                        and self.lexicon.has(target)
+                        and not known_meaning):
+                    self.pending = (target, text)
+                    self.ask_depth += 1
+                    self.asked_words.add(target)
+                    self.affect.event("new_input", intensity=0.6)
+                    return f"I know the word '{target}' but I don't know its meaning. Can you tell me?"
+
         rel_query = parse_query(text)
         if rel_query:
             rel_type, subj, obj = rel_query
@@ -233,12 +268,23 @@ class Brain:
         lookup = self._lookup_definition(text)
         if lookup:
             return lookup
-        if recall and recall[0][1] > 0.50 and intent != "identity":
-            past = recall[0][0]["text"]
-            pw = set(past.lower().split())
-            tw = set(text.lower().split())
-            if pw & tw:
-                return f"I remember you said '{past}'. " + self.lang.generate(intent, self.personality, self.affect)
+        if recall and intent != "identity":
+            past_ep, past_score = recall[0]
+            past_text = past_ep["text"]
+            cur_content = _content_words(text)
+            past_content = _content_words(past_text)
+            overlap = cur_content & past_content
+
+            past_is_question = _is_question_text(past_text)
+            cur_is_question = _is_question_text(text)
+
+            use_recall = (
+                past_score > 0.55
+                and len(overlap) >= 1
+                and not (past_is_question and cur_is_question)
+            )
+            if use_recall:
+                return f"You mentioned '{past_text}' earlier."
         return self.lang.generate(intent, self.personality, self.affect)
 
     def _reset_chain(self):
@@ -450,7 +496,8 @@ class Brain:
             self.ask_depth += 1
             self.asked_words.add(word)
             self.affect.event("new_input", intensity=0.8)
-            self._bind_words(words)
+            known_words = [w for w in words if self.lexicon.has(w)]
+            self._bind_words(known_words)
             self.episodic.store(text, self.affect.mood(), f"[asked about '{word}']", 0.5)
             self.affect.tick()
             return {

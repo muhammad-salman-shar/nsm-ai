@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "saved_at": 1792255854.3678648,
-  "turn": 37,
+  "saved_at": 1792256465.3963032,
+  "turn": 46,
   "max_depth": 5,
   "definitions": {
     "mango": "Mango is fruit",
@@ -14,7 +14,11 @@
     "exists": "Happen",
     "happen": "To be in planet",
     "living": "Living means to stay",
-    "taste": "Mango taste is sweet"
+    "taste": "Mango taste is sweet",
+    "language": "Tool of communication"
+  },
+  "facts": {
+    "name": "Salman"
   },
   "relations": {
     "IS|mango": {
@@ -394,6 +398,38 @@
       "contexts": []
     },
     "of": {
+      "count": 1,
+      "contexts": []
+    },
+    "happy": {
+      "count": 1,
+      "contexts": []
+    },
+    "but": {
+      "count": 1,
+      "contexts": []
+    },
+    "said": {
+      "count": 1,
+      "contexts": []
+    },
+    "ask": {
+      "count": 1,
+      "contexts": []
+    },
+    "me": {
+      "count": 1,
+      "contexts": []
+    },
+    "language": {
+      "count": 1,
+      "contexts": []
+    },
+    "tool": {
+      "count": 1,
+      "contexts": []
+    },
+    "communication": {
       "count": 1,
       "contexts": []
     }
@@ -911,21 +947,138 @@
         "your",
         "nickname"
       ]
+    },
+    {
+      "t": 1792256378.1192272,
+      "text": "My name is Salman",
+      "mood": "happy",
+      "response": "Got it! I'll remember your name is Salman.",
+      "strength": 0.8453115710395509,
+      "words": [
+        "my",
+        "name",
+        "is",
+        "salman"
+      ]
+    },
+    {
+      "t": 1792256388.701739,
+      "text": "What is my name",
+      "mood": "happy",
+      "response": "Your name is Salman.",
+      "strength": 0.8631804139355959,
+      "words": [
+        "what",
+        "is",
+        "my",
+        "name"
+      ]
+    },
+    {
+      "t": 1792256397.2040598,
+      "text": "I am happy",
+      "mood": "happy",
+      "response": "I remember you said 'I am salman'. That's wonderful!",
+      "strength": 0.8468623725420363,
+      "words": [
+        "i",
+        "am",
+        "happy"
+      ]
+    },
+    {
+      "t": 1792256410.660058,
+      "text": "But I said I am happy",
+      "mood": "happy",
+      "response": "I remember you said 'I am happy'. Yay! I'm happy for you!",
+      "strength": 0.8321761352878327,
+      "words": [
+        "but",
+        "i",
+        "said",
+        "i",
+        "am",
+        "happy"
+      ]
+    },
+    {
+      "t": 1792256418.8441927,
+      "text": "What is happy",
+      "mood": "happy",
+      "response": "I remember you said 'What is NeuraSaMu'. Fun question! I'm not sure but I like it.",
+      "strength": 0.8189585217590494,
+      "words": [
+        "what",
+        "is",
+        "happy"
+      ]
+    },
+    {
+      "t": 1792256430.9387324,
+      "text": "I said what is happy",
+      "mood": "happy",
+      "response": "I remember you said 'What is happy'. Yay! I'm happy for you!",
+      "strength": 0.8070626695831444,
+      "words": [
+        "i",
+        "said",
+        "what",
+        "is",
+        "happy"
+      ]
+    },
+    {
+      "t": 1792256445.0822175,
+      "text": "Ask me something",
+      "mood": "happy",
+      "response": "I don't know that yet but I'm learning!",
+      "strength": 0.79635640262483,
+      "words": [
+        "ask",
+        "me",
+        "something"
+      ]
+    },
+    {
+      "t": 1792256456.0975382,
+      "text": "What is language",
+      "mood": "happy",
+      "response": "[asked about 'language']",
+      "strength": 0.5,
+      "words": [
+        "what",
+        "is",
+        "language"
+      ]
+    },
+    {
+      "t": 1792256465.3945725,
+      "text": "learned language: Tool of communication",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "language:",
+        "tool",
+        "of",
+        "communication"
+      ]
     }
   ],
   "affect": {
     "drives": {
-      "curiosity": 59.0,
-      "attention": 78,
-      "social_reward": 97.0,
+      "curiosity": 58.0,
+      "attention": 89.0,
+      "social_reward": 98.5,
       "confusion": 0.0,
       "satisfaction": 98.5,
-      "bonding": 99.0
+      "bonding": 99.5
     },
     "hormones": {
-      "dopamine": 69.06231420791019,
-      "oxytocin": 94.0,
-      "cortisol": 39.594488808191095
+      "dopamine": 65.92876350270022,
+      "oxytocin": 92.82999999999998,
+      "cortisol": 39.842896655774425
     }
   }
 }
