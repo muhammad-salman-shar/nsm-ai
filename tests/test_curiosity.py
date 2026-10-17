@@ -53,14 +53,45 @@ class TestCuriosity(unittest.TestCase):
         self.assertIn("animal", r["response"])
 
     def test_max_depth_prevents_infinite_loop(self):
-        self.b.observe("I saw a zzzz")
+        b = Brain(max_depth=3)
+        b.observe("I saw a zzzz")
         for _ in range(10):
-            if self.b.pending:
-                self.b.observe("a bbbb cccc dddd eeee")
+            if b.pending:
+                b.observe("a bbbb cccc dddd eeee")
             else:
                 break
-        # loop terminates, no crash
-        self.assertLessEqual(self.b.ask_depth, 3)
+        self.assertLessEqual(b.ask_depth, 3)
+
+    def test_depth_limit_configurable(self):
+        b = Brain(max_depth=2)
+        b.observe("the zorp")
+        b.observe("zorp is blurp")
+        b.observe("blurp is zizz")
+        self.assertIsNone(b.pending)
+
+    def test_hard_cap_on_depth(self):
+        b = Brain(max_depth=100)
+        self.assertLessEqual(b.max_depth, 8)
+
+    def test_new_chain_starts_fresh(self):
+        b = Brain()
+        b.observe("the zorp")
+        self.assertEqual(b.ask_depth, 1)
+        self.assertIn("zorp", b.asked_words)
+        b.observe("what is zorp")
+        self.assertIsNone(b.pending)
+        self.assertEqual(b.ask_depth, 0)
+        self.assertEqual(len(b.asked_words), 0)
+
+    def test_deeper_chain_works_within_limit(self):
+        b = Brain(max_depth=6)
+        b.observe("the zorp")
+        r1 = b.observe("zorp is blurp")
+        self.assertIn("blurp", r1["response"])
+        r2 = b.observe("blurp is zizz")
+        self.assertIn("zizz", r2["response"])
+        r3 = b.observe("zizz is quux")
+        self.assertIn("quux", r3["response"])
 
     def test_stopwords_dont_trigger_question(self):
         for w in list(STOPWORDS)[:30]:

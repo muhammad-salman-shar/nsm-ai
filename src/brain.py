@@ -7,7 +7,9 @@ from src.language import Language
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
-MAX_ASK_DEPTH = 3
+
+DEFAULT_MAX_DEPTH = 5
+HARD_MAX_DEPTH = 8
 
 _GRAMMAR = {
     "a","an","the","is","are","am","was","were","be","been","being",
@@ -51,7 +53,7 @@ _COMMON_VERBS = {
     "climb","climbed","fall","fell","laugh","laughed",
     "cry","cried","smile","smiled","hope","hoped",
     "wish","wished","decide","decided","explain","explained",
-    "means","mean","meaning","meant","known","told","said",
+    "means","mean","meaning","meant","known",
 }
 
 _QUESTION_STARTERS = {
@@ -85,19 +87,22 @@ def _is_question_text(text):
 
 
 class Brain:
-    def __init__(self, perceptron_path="src/perceptron.npz"):
+    def __init__(self, perceptron_path="src/perceptron.npz",
+                 max_depth=DEFAULT_MAX_DEPTH):
         self.affect = Affect()
         self.personality = Personality
         self.lexicon = Lexicon()
         self.episodic = EpisodicMemory()
         self.perceptron = Perceptron()
         self.lang = Language(seed=7)
+        self.max_depth = min(int(max_depth), HARD_MAX_DEPTH)
         self._boot_perceptron(perceptron_path)
         self._seed_lexicon("data/stimuli.txt")
         self.turn = 0
         self.pending = None
         self.definitions = {}
         self.ask_depth = 0
+        self.asked_words = set()
 
     def _boot_perceptron(self, path):
         try:
@@ -208,6 +213,10 @@ class Brain:
                 return f"I remember you said '{past}'. " + self.lang.generate(intent, self.personality, self.affect)
         return self.lang.generate(intent, self.personality, self.affect)
 
+    def _reset_chain(self):
+        self.ask_depth = 0
+        self.asked_words.clear()
+
     def _answer_question(self, text):
         words, intent, conf = self._perceive(text)
         self._attend(words)
@@ -252,15 +261,16 @@ class Brain:
         seen = set()
         candidates = []
         for w in def_unknown + orig_unknown:
-            if w not in seen:
+            if w not in seen and w not in self.asked_words:
                 seen.add(w)
                 candidates.append(w)
         candidates.sort(key=lambda w: -len(w))
 
-        if candidates and self.ask_depth < MAX_ASK_DEPTH:
+        if candidates and self.ask_depth < self.max_depth:
             nw = candidates[0]
             self.pending = (nw, original)
             self.ask_depth += 1
+            self.asked_words.add(nw)
             self.affect.tick()
             return {
                 "turn": self.turn, "text": text, "intent": "question",
@@ -269,7 +279,7 @@ class Brain:
                 "defined": label,
             }
 
-        self.ask_depth = 0
+        self._reset_chain()
         words, intent, conf = self._perceive(original)
         self._attend(words)
         self._bind_words(words)
@@ -289,7 +299,7 @@ class Brain:
 
         if self.pending and _is_question_text(text):
             self.pending = None
-            self.ask_depth = 0
+            self._reset_chain()
             return self._answer_question(text)
 
         if self.pending:
@@ -300,10 +310,11 @@ class Brain:
         recall = self.episodic.recall(text, top_k=1)
 
         unknown = self._find_unknown(words)
-        if unknown and self.ask_depth < MAX_ASK_DEPTH:
+        if unknown and self.ask_depth < self.max_depth:
             word = unknown[0]
             self.pending = (word, text)
             self.ask_depth += 1
+            self.asked_words.add(word)
             self.affect.event("new_input", intensity=0.8)
             self._bind_words(words)
             self.episodic.store(text, self.affect.mood(), f"[asked about '{word}']", 0.5)
@@ -344,6 +355,8 @@ class Brain:
             "vocab": len(self.lexicon.words),
             "definitions": len(self.definitions),
             "pending": self.pending,
+            "max_depth": self.max_depth,
+            "ask_depth": self.ask_depth,
             "affect": dict(self.affect.drives),
             "hormones": dict(self.affect.hormones),
         }
