@@ -4,6 +4,7 @@ from src.personality import Personality
 from src.memory import Lexicon, EpisodicMemory
 from src.perceptron import Perceptron, TRAINING_DATA
 from src.language import Language
+from src.relations import extract, parse_query, RelationStore
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
@@ -95,6 +96,7 @@ class Brain:
         self.episodic = EpisodicMemory()
         self.perceptron = Perceptron()
         self.lang = Language(seed=7)
+        self.relations = RelationStore()
         self.max_depth = min(int(max_depth), HARD_MAX_DEPTH)
         self._boot_perceptron(perceptron_path)
         self._seed_lexicon("data/stimuli.txt")
@@ -202,6 +204,16 @@ class Brain:
         if math is not None:
             self.affect.event("rewarded", intensity=0.5)
             return f"The answer is {math}."
+        rel_query = parse_query(text)
+        if rel_query:
+            rel_type, subj, obj = rel_query
+            if self.relations.has(rel_type, subj, obj):
+                return f"Yes, {subj} is {obj}." if rel_type == "IS" else f"Yes, {subj} has {obj}."
+            known = self.relations.get(rel_type, subj)
+            if known:
+                verb = "is" if rel_type == "IS" else "has"
+                return f"I know {subj} {verb} {', '.join(known)}. But I don't know if {subj} {verb} {obj}."
+            return f"I don't know {subj} yet. Teach me?"
         lookup = self._lookup_definition(text)
         if lookup:
             return lookup
@@ -254,6 +266,8 @@ class Brain:
             self.definitions[word] = definition
             label = word
             self.lexicon.see(word, _words(definition)[:3])
+            for rel_type, subj, obj in extract(word, definition):
+                self.relations.add(rel_type, subj, obj)
 
         self.episodic.store(f"learned {label}: {definition}", "curious", "[learned]", 1.0)
         self.affect.event("rewarded", intensity=0.8)
@@ -309,7 +323,10 @@ class Brain:
         self._attend(words)
         recall = self.episodic.recall(text, top_k=1)
 
-        unknown = self._find_unknown(words)
+        if parse_query(text) is None:
+            unknown = self._find_unknown(words)
+        else:
+            unknown = []
         if unknown and self.ask_depth < self.max_depth:
             word = unknown[0]
             self.pending = (word, text)
@@ -354,6 +371,7 @@ class Brain:
             "episodes": self.episodic.size(),
             "vocab": len(self.lexicon.words),
             "definitions": len(self.definitions),
+            "relations": self.relations.count(),
             "pending": self.pending,
             "max_depth": self.max_depth,
             "ask_depth": self.ask_depth,
