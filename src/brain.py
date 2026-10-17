@@ -4,7 +4,8 @@ from src.personality import Personality
 from src.memory import Lexicon, EpisodicMemory
 from src.perceptron import Perceptron, TRAINING_DATA
 from src.language import Language
-from src.relations import extract, parse_query, RelationStore
+from src.relations import (extract, parse_query, RelationStore,
+                           CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL)
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
@@ -55,6 +56,7 @@ _COMMON_VERBS = {
     "cry","cried","smile","smiled","hope","hoped",
     "wish","wished","decide","decided","explain","explained",
     "means","mean","meaning","meant","known",
+    "actually","wrong","correction","instead","alright",
 }
 
 _QUESTION_STARTERS = {
@@ -207,12 +209,19 @@ class Brain:
         rel_query = parse_query(text)
         if rel_query:
             rel_type, subj, obj = rel_query
-            if self.relations.has(rel_type, subj, obj):
-                return f"Yes, {subj} is {obj}." if rel_type == "IS" else f"Yes, {subj} has {obj}."
-            known = self.relations.get(rel_type, subj)
-            if known:
-                verb = "is" if rel_type == "IS" else "has"
-                return f"I know {subj} {verb} {', '.join(known)}. But I don't know if {subj} {verb} {obj}."
+            verb = "is" if rel_type == "IS" else "has"
+            status, detail = self.relations.query(rel_type, subj, obj)
+            if status == "yes":
+                return f"Yes, {subj} {verb} {obj}."
+            if status == "superseded":
+                active = self.relations.get(rel_type, subj)
+                if active:
+                    return f"No, {subj} {verb} {', '.join(active)}, not {obj}."
+                return f"No, {subj} {verb} {obj} is outdated."
+            if status == "no":
+                if detail:
+                    return f"I know {subj} {verb} {', '.join(detail)}. But I don't know if {subj} {verb} {obj}."
+                return f"No, {subj} {verb} {', '.join(detail)}." if detail else f"I don't know."
             return f"I don't know {subj} yet. Teach me?"
         lookup = self._lookup_definition(text)
         if lookup:
@@ -228,6 +237,34 @@ class Brain:
     def _reset_chain(self):
         self.ask_depth = 0
         self.asked_words.clear()
+
+    def _try_learn_relation(self, text):
+        words = _words(text)
+        if len(words) < 3:
+            return None
+        for m in ("means", "is", "are", "has"):
+            if m not in words:
+                continue
+            idx = words.index(m)
+            pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS and w not in STOPWORDS]
+            post = [w for w in words[idx+1:] if w not in NOUN_DETERMINERS and w not in STOP_TAIL]
+            if not pre or not post:
+                continue
+            subject = pre[-1]
+            if len(subject) < 3:
+                continue
+            if not self.lexicon.has(subject) and subject not in self.definitions:
+                self.definitions[subject] = text.strip()
+                self.lexicon.see(subject, post[:3])
+            rels = extract(subject, text)
+            if not rels:
+                continue
+            for rel in rels:
+                self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
+                if rel["object"] and not self.lexicon.has(rel["object"]):
+                    self.lexicon.see(rel["object"])
+            return f"Got it! I learned that {subject} {m} {' '.join(post[:3])}."
+        return None
 
     def _answer_question(self, text):
         words, intent, conf = self._perceive(text)
@@ -266,8 +303,10 @@ class Brain:
             self.definitions[word] = definition
             label = word
             self.lexicon.see(word, _words(definition)[:3])
-            for rel_type, subj, obj in extract(word, definition):
-                self.relations.add(rel_type, subj, obj)
+            for rel in extract(word, definition):
+                self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
+                if rel["object"] and not self.lexicon.has(rel["object"]):
+                    self.lexicon.see(rel["object"])
 
         self.episodic.store(f"learned {label}: {definition}", "curious", "[learned]", 1.0)
         self.affect.event("rewarded", intensity=0.8)
@@ -298,7 +337,10 @@ class Brain:
         self._attend(words)
         self._bind_words(words)
         recall = self.episodic.recall(original, top_k=1)
-        response = "Got it! " + self._generate(intent, conf, original, recall)
+        if intent == "unknown" or conf < 0.40:
+            response = f"Got it! Now I know about '{label}'. Thanks for teaching me!"
+        else:
+            response = "Got it! " + self._generate(intent, conf, original, recall)
         self.episodic.store(original, self.affect.mood(), response, self.affect.binding_strength())
         self.affect.tick()
         return {
@@ -318,6 +360,20 @@ class Brain:
 
         if self.pending:
             return self._resolve_pending(text)
+
+        learned_resp = self._try_learn_relation(text)
+        if learned_resp:
+            words_lr = _words(text)
+            self._attend(words_lr)
+            self._bind_words(words_lr)
+            self.episodic.store(text, self.affect.mood(), learned_resp, self.affect.binding_strength())
+            self.affect.event("rewarded", intensity=0.5)
+            self.affect.tick()
+            return {
+                "turn": self.turn, "text": text, "intent": "statement",
+                "confidence": 0, "mood": self.affect.mood(), "recall": None,
+                "response": learned_resp,
+            }
 
         words, intent, conf = self._perceive(text)
         self._attend(words)

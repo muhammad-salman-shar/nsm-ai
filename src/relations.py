@@ -1,10 +1,12 @@
 import re
+import time
 
 NOUN_DETERMINERS = {"a", "an", "the"}
-ADJECTIVE_HINTS = {"very", "really", "quite", "so", "too", "kind", "sort"}
+STOP_TAIL = {"a","an","the","of","in","on","at","to","for",
+             "with","by","from","and","or","but","is","are"}
 
-STOP_TAIL = {"a", "an", "the", "of", "in", "on", "at", "to", "for",
-             "with", "by", "from", "and", "or", "but", "is", "are"}
+CORRECTION_MARKERS = {"no","actually","wrong","correction","instead","not"}
+REINFORCE_WORDS = {"yes","right","correct","exactly","true"}
 
 
 def _tokens(text):
@@ -20,11 +22,13 @@ def _pick_head_noun(tail_words):
     return tail_words[-1] if tail_words else None
 
 
-def extract(subject_word, definition_text):
+def extract(subject_word, definition_text, correction=False):
     words = _tokens(definition_text)
     subject = subject_word.lower().strip() if subject_word else None
     if not words or not subject:
         return []
+
+    is_correction = correction or any(w in CORRECTION_MARKERS for w in words[:3])
 
     if subject in words:
         idx = words.index(subject)
@@ -38,7 +42,7 @@ def extract(subject_word, definition_text):
         i = words.index("has")
         obj = _pick_head_noun(words[i + 1:])
         if obj and obj != subject:
-            rels.append(("HAS", subject, obj))
+            rels.append({"type": "HAS", "subject": subject, "object": obj, "correct": is_correction})
         return rels
 
     if "means" in words or "mean" in words:
@@ -46,18 +50,18 @@ def extract(subject_word, definition_text):
                 words.index("mean") if "mean" in words else -1)
         obj_words = [w for w in words[i + 1:] if w not in STOP_TAIL]
         if obj_words:
-            rels.append(("IS", subject, obj_words[0]))
+            rels.append({"type": "IS", "subject": subject, "object": obj_words[0], "correct": is_correction})
         return rels
 
     if "is" in words or "are" in words:
         marker = "is" if "is" in words else "are"
         i = words.index(marker)
-        tail = [w for w in words[i + 1:] if w not in NOUN_DETERMINERS]
+        tail = [w for w in words[i + 1:] if w not in NOUN_DETERMINERS and w not in CORRECTION_MARKERS]
         if not tail:
             return []
         head = _pick_head_noun(tail)
         if head and head != subject:
-            rels.append(("IS", subject, head))
+            rels.append({"type": "IS", "subject": subject, "object": head, "correct": is_correction})
         return rels
 
     return []
@@ -65,23 +69,72 @@ def extract(subject_word, definition_text):
 
 class RelationStore:
     def __init__(self):
-        self.relations = {}
+        self.relations = {}  # (type, subject) -> {obj: record}
 
-    def add(self, rel_type, subject, obj):
+    def _rec(self, rel_type, subject, obj, correct=False):
         key = (rel_type, subject)
-        self.relations.setdefault(key, set()).add(obj)
+        if key not in self.relations:
+            self.relations[key] = {}
+        bucket = self.relations[key]
+        now = time.time()
+        if obj not in bucket:
+            bucket[obj] = {"count": 1, "first_seen": now, "last_seen": now,
+                           "superseded": False, "source": "user"}
+        else:
+            bucket[obj]["count"] += 1
+            bucket[obj]["last_seen"] = now
+            bucket[obj]["superseded"] = False
 
-    def get(self, rel_type, subject):
-        return sorted(self.relations.get((rel_type, subject), set()))
+        if correct:
+            for other, rec in bucket.items():
+                if other != obj:
+                    rec["superseded"] = True
 
-    def has(self, rel_type, subject, obj):
-        return obj in self.relations.get((rel_type, subject), set())
+    def add(self, rel_type, subject, obj, correct=False):
+        self._rec(rel_type, subject, obj, correct)
 
-    def all(self):
-        return {k: sorted(v) for k, v in self.relations.items()}
+    def get(self, rel_type, subject, include_superseded=False):
+        bucket = self.relations.get((rel_type, subject), {})
+        return sorted([o for o, r in bucket.items()
+                       if include_superseded or not r["superseded"]])
+
+    def active_count(self):
+        n = 0
+        for bucket in self.relations.values():
+            for rec in bucket.values():
+                if not rec["superseded"]:
+                    n += 1
+        return n
+
+    def query(self, rel_type, subject, obj):
+        bucket = self.relations.get((rel_type, subject))
+        if not bucket:
+            return ("unknown_subject", None)
+        target = bucket.get(obj)
+        if target and not target["superseded"]:
+            return ("yes", target)
+        if target and target["superseded"]:
+            return ("superseded", target)
+        active = [o for o, r in bucket.items() if not r["superseded"]]
+        if active:
+            return ("no", active)
+        return ("no", [])
+
+    def history(self, rel_type, subject):
+        bucket = self.relations.get((rel_type, subject), {})
+        return {obj: dict(rec) for obj, rec in bucket.items()}
 
     def count(self):
-        return sum(len(v) for v in self.relations.values())
+        return self.active_count()
+
+    def all(self):
+        out = {}
+        for key, bucket in self.relations.items():
+            active = [o for o, r in bucket.items() if not r["superseded"]]
+            if active:
+                out[key] = sorted(active)
+        return out
+
 
 def parse_query(text):
     words = _tokens(text)
