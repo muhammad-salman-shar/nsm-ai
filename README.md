@@ -22,3 +22,10 @@ python -m src.main
 ## Honest
 "Emotions" are numeric state variables. "Feeling" is functional, not phenomenal.
 Stage 1 is reflex-level — no language, no reasoning, just associative life.
+
+## Disclaimer
+
+`AGE = 10` is a personality frame, not a cognitive capability claim.
+NSM VB is a developmental experiment. It is not a biological brain,
+not an LLM, and not proven intelligent. All claims are testable —
+see `tests/test_proof.py`.
