@@ -15,10 +15,17 @@ def get_brain(user_id="default"):
     if user_id not in _brain_cache:
         # Create fresh brain
         b = Brain(auto_save_path=None)
-        # Try loading from SQLite database
-        state = database.load_brain(user_id)
-        if state:
-            persistence.from_dict(b, state)
+        # 1. First load PUBLIC knowledge (Global Brain)
+        public_state = database.load_brain("public")
+        if public_state:
+            persistence.from_dict(b, public_state)
+        
+        # 2. Then load PERSONAL knowledge (overwrites public facts)
+        if user_id != "public":
+            personal_state = database.load_brain(user_id)
+            if personal_state:
+                persistence.from_dict(b, personal_state)
+                
         _brain_cache[user_id] = b
     return _brain_cache[user_id]
 
