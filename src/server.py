@@ -5,17 +5,22 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 from src.brain import Brain
 from src import persistence
+from src import database
 
 DEFAULT_STATE = "data/brain_state.json"
 STATIC_DIR = "static"
-_brain = None
+_brain_cache = {}
 
-
-def get_brain():
-    global _brain
-    if _brain is None:
-        _brain = Brain(auto_save_path=DEFAULT_STATE)
-    return _brain
+def get_brain(user_id="default"):
+    if user_id not in _brain_cache:
+        # Create fresh brain
+        b = Brain(auto_save_path=None)
+        # Try loading from SQLite database
+        state = database.load_brain(user_id)
+        if state:
+            persistence.from_dict(b, state)
+        _brain_cache[user_id] = b
+    return _brain_cache[user_id]
 
 
 def _json_response(handler, status, data):
@@ -79,7 +84,10 @@ class Handler(BaseHTTPRequestHandler):
                 _json_response(self, 400, {"error": "no user message"})
                 return
             
-            result = get_brain().observe(text)
+            user_id = data.get("user_id", "default")
+            brain = get_brain(user_id)
+            result = brain.observe(text)
+            database.save_brain(user_id, persistence.to_dict(brain))
             response_text = result["response"]
             
             # Check if the app is asking for a stream
@@ -131,13 +139,17 @@ class Handler(BaseHTTPRequestHandler):
             if not text:
                 _json_response(self, 400, {"error": "empty text"})
                 return
-            result = get_brain().observe(text)
+            user_id = data.get("user_id", "default")
+            brain = get_brain(user_id)
+            result = brain.observe(text)
+            database.save_brain(user_id, persistence.to_dict(brain))
             _json_response(self, 200, result)
         elif parsed.path == "/reset":
-            global _brain
-            persistence.reset(DEFAULT_STATE)
-            _brain = Brain(auto_save_path=DEFAULT_STATE)
-            _json_response(self, 200, {"ok": True, "message": "reset"})
+            user_id = data.get("user_id", "default")
+            database.delete_brain(user_id)
+            if user_id in _brain_cache:
+                del _brain_cache[user_id]
+            _json_response(self, 200, {"ok": True, "message": f"reset for {user_id}"})
         else:
             handler_404(self)
 
