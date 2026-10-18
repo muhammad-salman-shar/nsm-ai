@@ -1,11 +1,64 @@
 {
   "version": 1,
-  "saved_at": 1792293822.6778202,
-  "turn": 1,
+  "saved_at": 1792332673.7669604,
+  "turn": 21,
   "max_depth": 5,
-  "definitions": {},
+  "definitions": {
+    "gym": "Gym means gymnastics",
+    "gymnastics": "Physical exercise",
+    "physical": "That can we touch",
+    "touch": "Feels something",
+    "something": "Any thing that is present",
+    "orange": "Orange is fruit"
+  },
   "facts": {},
-  "relations": {},
+  "relations": {
+    "LIKE|salman": {
+      "muskan": {
+        "count": 1,
+        "first_seen": 1792296076.0207148,
+        "last_seen": 1792296076.0207148,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|gym": {
+      "gymnastics": {
+        "count": 1,
+        "first_seen": 1792296129.091147,
+        "last_seen": 1792296129.091147,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "FEEL|touch": {
+      "something": {
+        "count": 1,
+        "first_seen": 1792296165.5979476,
+        "last_seen": 1792296165.5979476,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|something": {
+      "present": {
+        "count": 1,
+        "first_seen": 1792296176.0564463,
+        "last_seen": 1792296176.0564463,
+        "superseded": false,
+        "source": "user"
+      }
+    },
+    "IS|orange": {
+      "fruit": {
+        "count": 1,
+        "first_seen": 1792331023.7767813,
+        "last_seen": 1792331023.7767813,
+        "superseded": false,
+        "source": "user"
+      }
+    }
+  },
   "lexicon": {
     "apple": {
       "count": 1,
@@ -158,6 +211,114 @@
     "name": {
       "count": 1,
       "contexts": []
+    },
+    "does": {
+      "count": 1,
+      "contexts": []
+    },
+    "salman": {
+      "count": 1,
+      "contexts": []
+    },
+    "like": {
+      "count": 1,
+      "contexts": []
+    },
+    "muskan": {
+      "count": 1,
+      "contexts": []
+    },
+    "likes": {
+      "count": 1,
+      "contexts": []
+    },
+    "can": {
+      "count": 1,
+      "contexts": []
+    },
+    "do": {
+      "count": 1,
+      "contexts": []
+    },
+    "gym": {
+      "count": 1,
+      "contexts": []
+    },
+    "means": {
+      "count": 1,
+      "contexts": []
+    },
+    "gymnastics": {
+      "count": 1,
+      "contexts": []
+    },
+    "physical": {
+      "count": 1,
+      "contexts": []
+    },
+    "exercise": {
+      "count": 1,
+      "contexts": []
+    },
+    "that": {
+      "count": 1,
+      "contexts": []
+    },
+    "we": {
+      "count": 1,
+      "contexts": []
+    },
+    "touch": {
+      "count": 1,
+      "contexts": []
+    },
+    "feels": {
+      "count": 1,
+      "contexts": []
+    },
+    "something": {
+      "count": 1,
+      "contexts": []
+    },
+    "any": {
+      "count": 1,
+      "contexts": []
+    },
+    "thing": {
+      "count": 1,
+      "contexts": []
+    },
+    "present": {
+      "count": 1,
+      "contexts": []
+    },
+    "orange": {
+      "count": 1,
+      "contexts": []
+    },
+    "hi": {
+      "count": 1,
+      "contexts": []
+    },
+    "hello": {
+      "count": 1,
+      "contexts": []
+    },
+    "your": {
+      "count": 1,
+      "contexts": []
+    },
+    "who": {
+      "count": 1,
+      "contexts": []
+    },
+    "are": {
+      "count": 1,
+      "contexts": []
+    },
+    "you": {
+      "count": 1,
+      "contexts": []
     }
   },
   "episodes": [
@@ -173,21 +334,288 @@
         "my",
         "name"
       ]
+    },
+    {
+      "t": 1792296067.159111,
+      "text": "What does salman like",
+      "mood": "curious",
+      "response": "I don't know what salman likes.",
+      "strength": 0.711875,
+      "words": [
+        "what",
+        "does",
+        "salman",
+        "like"
+      ]
+    },
+    {
+      "t": 1792296076.0256295,
+      "text": "Salman likes muskan",
+      "mood": "curious",
+      "response": "Got it! I learned that Salman likes muskan.",
+      "strength": 0.7106875,
+      "words": [
+        "salman",
+        "likes",
+        "muskan"
+      ]
+    },
+    {
+      "t": 1792296103.6551764,
+      "text": "What can salman do",
+      "mood": "happy",
+      "response": "I don't know that yet but I'm learning!",
+      "strength": 0.73661875,
+      "words": [
+        "what",
+        "can",
+        "salman",
+        "do"
+      ]
+    },
+    {
+      "t": 1792296117.4983773,
+      "text": "Salman can do gym",
+      "mood": "happy",
+      "response": "[asked about 'gym']",
+      "strength": 0.5,
+      "words": [
+        "salman",
+        "can",
+        "do",
+        "gym"
+      ]
+    },
+    {
+      "t": 1792296129.0993629,
+      "text": "learned gym: Gym means gymnastics",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "gym:",
+        "gym",
+        "means",
+        "gymnastics"
+      ]
+    },
+    {
+      "t": 1792296146.893125,
+      "text": "learned gymnastics: Physical exercise",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "gymnastics:",
+        "physical",
+        "exercise"
+      ]
+    },
+    {
+      "t": 1792296158.042374,
+      "text": "learned physical: That can we touch",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "physical:",
+        "that",
+        "can",
+        "we",
+        "touch"
+      ]
+    },
+    {
+      "t": 1792296165.6008558,
+      "text": "learned touch: Feels something",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "touch:",
+        "feels",
+        "something"
+      ]
+    },
+    {
+      "t": 1792296176.0586503,
+      "text": "learned something: Any thing that is present",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "something:",
+        "any",
+        "thing",
+        "that",
+        "is",
+        "present"
+      ]
+    },
+    {
+      "t": 1792296176.061804,
+      "text": "Salman can do gym",
+      "mood": "happy",
+      "response": "Got it! Now I know about 'something'. Thanks for teaching me!",
+      "strength": 0.92783530511875,
+      "words": [
+        "salman",
+        "can",
+        "do",
+        "gym"
+      ]
+    },
+    {
+      "t": 1792331016.8375568,
+      "text": "Orange",
+      "mood": "happy",
+      "response": "[asked about 'orange']",
+      "strength": 0.5,
+      "words": [
+        "orange"
+      ]
+    },
+    {
+      "t": 1792331023.7779138,
+      "text": "learned orange: Orange is fruit",
+      "mood": "curious",
+      "response": "[learned]",
+      "strength": 1.0,
+      "words": [
+        "learned",
+        "orange:",
+        "orange",
+        "is",
+        "fruit"
+      ]
+    },
+    {
+      "t": 1792331023.782283,
+      "text": "Orange",
+      "mood": "happy",
+      "response": "Got it! Now I know about 'orange'. Thanks for teaching me!",
+      "strength": 0.9561715971461875,
+      "words": [
+        "orange"
+      ]
+    },
+    {
+      "t": 1792331779.427357,
+      "text": "hi",
+      "mood": "happy",
+      "response": "Hello hello! I'm happy today!",
+      "strength": 0.9368044374315687,
+      "words": [
+        "hi"
+      ]
+    },
+    {
+      "t": 1792331793.1391265,
+      "text": "hello",
+      "mood": "happy",
+      "response": "Hi hi hi! So nice to see you!",
+      "strength": 0.919373993688412,
+      "words": [
+        "hello"
+      ]
+    },
+    {
+      "t": 1792332239.1384602,
+      "text": "hi",
+      "mood": "happy",
+      "response": "Hello hello! I'm happy today!",
+      "strength": 0.8974365943195707,
+      "words": [
+        "hi"
+      ]
+    },
+    {
+      "t": 1792332252.3818185,
+      "text": "hello",
+      "mood": "happy",
+      "response": "You mentioned 'hello' earlier.",
+      "strength": 0.8776929348876137,
+      "words": [
+        "hello"
+      ]
+    },
+    {
+      "t": 1792332423.3752828,
+      "text": "hi",
+      "mood": "happy",
+      "response": "Hi hi hi! So nice to see you!",
+      "strength": 0.8599236413988522,
+      "words": [
+        "hi"
+      ]
+    },
+    {
+      "t": 1792332648.928669,
+      "text": "hi",
+      "mood": "happy",
+      "response": "Hello hello! I'm happy today!",
+      "strength": 0.8439312772589671,
+      "words": [
+        "hi"
+      ]
+    },
+    {
+      "t": 1792332655.721614,
+      "text": "what is your name",
+      "mood": "happy",
+      "response": "I know the word 'name' but I don't know its meaning. Can you tell me?",
+      "strength": 0.8445381495330704,
+      "words": [
+        "what",
+        "is",
+        "your",
+        "name"
+      ]
+    },
+    {
+      "t": 1792332665.4339054,
+      "text": "who are you",
+      "mood": "happy",
+      "response": "I'm NSM VB! I'm 10 years old!",
+      "strength": 0.8363343345797634,
+      "words": [
+        "who",
+        "are",
+        "you"
+      ]
+    },
+    {
+      "t": 1792332673.7658288,
+      "text": "what is your age",
+      "mood": "happy",
+      "response": "[asked about 'age']",
+      "strength": 0.5,
+      "words": [
+        "what",
+        "is",
+        "your",
+        "age"
+      ]
     }
   ],
   "affect": {
     "drives": {
-      "curiosity": 71.5,
-      "attention": 51.75,
-      "social_reward": 48.5,
-      "confusion": 48.0,
-      "satisfaction": 48.5,
-      "bonding": 49.5
+      "curiosity": 70.0,
+      "attention": 93.5,
+      "social_reward": 85.0,
+      "confusion": 0.0,
+      "satisfaction": 98.5,
+      "bonding": 81.90000000000002
     },
     "hormones": {
-      "dopamine": 41.125,
-      "oxytocin": 40.0,
-      "cortisol": 22.0
+      "dopamine": 65.68616220192166,
+      "oxytocin": 87.91242164362482,
+      "cortisol": 37.81162021736976
     }
   }
 }

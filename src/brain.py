@@ -9,6 +9,7 @@ from src.relations import (extract, parse_query, RelationStore,
 from src import persistence
 from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
 from src.producer import produce_svo
+from src.composer import compose_object
 from src.patterns import is_svo_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
@@ -263,6 +264,12 @@ class Brain:
         return None
 
     def _generate(self, intent, conf, text, recall):
+        t_low = text.lower()
+        if "your name" in t_low or "who are you" in t_low:
+            return f"I am {self.personality.NAME}, built by {self.personality.BUILDER}."
+        if "your age" in t_low or "how old are you" in t_low:
+            return f"I am {self.personality.AGE} years old."
+            
         math = self._try_math(text)
         if math is not None:
             self.affect.event("rewarded", intensity=0.5)
@@ -291,9 +298,9 @@ class Brain:
             rel_type, subj, obj = rel_query
             
             if rel_type == "SVO":
-                known = self.relations.get(obj.upper(), subj)
-                if known:
-                    return produce_svo(subj, obj, known[0])
+                composed_obj = compose_object(subj, obj, self.relations)
+                if composed_obj:
+                    return produce_svo(subj, obj, composed_obj)
                 return f"I don't know what {subj} {obj}s."
 
             verb = "is" if rel_type == "IS" else "has"
@@ -337,6 +344,10 @@ class Brain:
         self.asked_words.clear()
 
     def _try_learn_relation(self, text):
+        # Do not learn from questions! Only statements.
+        if _is_question_text(text) or text.strip().endswith("?"):
+            return None
+            
         words = _words(text)
         if len(words) < 3:
             return None
@@ -364,7 +375,8 @@ class Brain:
                             self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
                             if rel["object"] and not self.lexicon.has(rel["object"]):
                                 self.lexicon.see(rel["object"])
-                        return f"Got it! I learned that {subject} {svo_verb} {' '.join(post[:3])}."
+                        subj_cap = subject.capitalize() if subject.lower() != "i" else "I"
+                        return f"Got it! I learned that {subj_cap} {svo_verb} {' '.join(post[:3])}."
             return None
 
         # 2. Fallback to standard relations (means, is, are, has)
@@ -378,7 +390,7 @@ class Brain:
             return None
 
         idx = words.index(m)
-        pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS and w not in STOPWORDS]
+        pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS]
         post = [w for w in words[idx+1:] if w not in NOUN_DETERMINERS and w not in STOP_TAIL]
         
         if not pre or not post:

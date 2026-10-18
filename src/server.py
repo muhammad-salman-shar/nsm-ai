@@ -1,3 +1,4 @@
+import time
 import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -65,7 +66,67 @@ class Handler(BaseHTTPRequestHandler):
             _json_response(self, 400, {"error": "invalid json"})
             return
 
-        if parsed.path == "/chat":
+        if parsed.path == "/v1/chat/completions":
+            messages = data.get("messages", [])
+            text = ""
+            if messages:
+                # Get the last message from user
+                for msg in reversed(messages):
+                    if msg.get("role") == "user":
+                        text = msg.get("content", "")
+                        break
+            if not text:
+                _json_response(self, 400, {"error": "no user message"})
+                return
+            
+            result = get_brain().observe(text)
+            response_text = result["response"]
+            
+            # Check if the app is asking for a stream
+            if data.get("stream", False):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                
+                # Split by words to simulate token streaming
+                words = response_text.split(" ")
+                for i, word in enumerate(words):
+                    chunk_text = word + (" " if i < len(words) - 1 else "")
+                    chunk_data = {
+                        "id": "chatcmpl-nsm",
+                        "object": "chat.completion.chunk",
+                        "model": "nsm-vb",
+                        "choices": [{"index": 0, "delta": {"content": chunk_text}, "finish_reason": None}]
+                    }
+                    self.wfile.write(f"data: {json.dumps(chunk_data)}\n\n".encode())
+                    self.wfile.flush()
+                    time.sleep(0.05)
+                
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+                return
+
+            # If not streaming, send normal JSON
+            openai_resp = {
+                "id": "chatcmpl-nsm",
+                "object": "chat.completion",
+                "created": 1234567890,
+                "model": "nsm-vb",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": result["response"]
+                    },
+                    "finish_reason": "stop"
+                }]
+            }
+            _json_response(self, 200, openai_resp)
+
+        elif parsed.path == "/chat":
             text = (data.get("text") or "").strip()
             if not text:
                 _json_response(self, 400, {"error": "empty text"})
@@ -85,7 +146,7 @@ def handler_404(handler):
     _json_response(handler, 404, {"error": "not found"})
 
 
-def run(host="0.0.0.0", port=8000):
+def run(host="0.0.0.0", port=8081):
     os.makedirs(STATIC_DIR, exist_ok=True)
     server = HTTPServer((host, port), Handler)
     print(f"NSM VB server on http://{host}:{port}")
