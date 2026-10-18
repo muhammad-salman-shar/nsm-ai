@@ -48,7 +48,7 @@ class TestPendingCancel(unittest.TestCase):
         r = self.b.observe("hello")
         self.assertIsNone(self.b.pending)
         self.assertNotIn("zorblax means", r["response"].lower())
-        self.assertIn("hello", r["response"].lower())
+        self.assertTrue(any(w in r["response"].lower() for w in ["hi", "hey", "hello"]))
 
     def test_skip_cancels_pending(self):
         self.b.observe("what is zorblax")

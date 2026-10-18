@@ -319,8 +319,9 @@ class Brain:
                     if inferred:
                         return reason_msg
                 if detail:
-                    return f"I know {subj} {verb} {', '.join(detail)}. But I don't know if {subj} {verb} {obj}."
-                return f"No, {subj} {verb} {', '.join(detail)}." if detail else f"I don't know."
+                    known_str = f"{subj} {verb} {detail[0]}" if len(detail) == 1 else f"{subj} {verb} {', '.join(detail[:-1])} or {detail[-1]}"
+                    return f"I know {known_str}, but I don't know if {subj} {verb} {obj}."
+                return f"I don't have enough information about {subj} yet."
             return f"I don't know {subj} yet. Teach me?"
         lookup = self._lookup_definition(text)
         if lookup:
@@ -341,7 +342,14 @@ class Brain:
                 and not (past_is_question and cur_is_question)
             )
             if use_recall:
-                return f"You mentioned '{past_text}' earlier."
+                past_clean = past_text.strip()
+                if past_clean:
+                    past_clean = past_clean[0].upper() + past_clean[1:]
+                
+                # If user is asking a question, confirm it. If statement, just recall.
+                if _is_question_text(text):
+                    return f"Yes, you told me earlier: \"{past_clean}\""
+                return f"I remember you said: \"{past_clean}\"."
         return self.lang.generate(intent, self.personality, self.affect)
 
     def _reset_chain(self):
