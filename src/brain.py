@@ -8,6 +8,8 @@ from src.relations import (extract, parse_query, RelationStore,
                            CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL)
 from src import persistence
 from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
+from src.producer import produce_svo
+from src.patterns import is_svo_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
@@ -287,6 +289,13 @@ class Brain:
         rel_query = parse_query(text)
         if rel_query:
             rel_type, subj, obj = rel_query
+            
+            if rel_type == "SVO":
+                known = self.relations.get(obj.upper(), subj)
+                if known:
+                    return produce_svo(subj, obj, known[0])
+                return f"I don't know what {subj} {obj}s."
+
             verb = "is" if rel_type == "IS" else "has"
             status, detail = self.relations.query(rel_type, subj, obj)
             if status == "yes":
@@ -331,29 +340,68 @@ class Brain:
         words = _words(text)
         if len(words) < 3:
             return None
-        for m in ("means", "is", "are", "has"):
-            if m not in words:
-                continue
-            idx = words.index(m)
-            pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS and w not in STOPWORDS]
+        
+        # 1. Check for SVO verbs (likes, wants, eats, etc.)
+        svo_verb = None
+        for w in words:
+            if is_svo_verb(w):
+                svo_verb = w
+                break
+                
+        if svo_verb:
+            idx = words.index(svo_verb)
+            pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS]
             post = [w for w in words[idx+1:] if w not in NOUN_DETERMINERS and w not in STOP_TAIL]
-            if not pre or not post:
-                continue
-            subject = pre[-1]
-            if len(subject) < 3:
-                continue
-            if not self.lexicon.has(subject) and subject not in self.definitions:
-                self.definitions[subject] = text.strip()
-                self.lexicon.see(subject, post[:3])
-            rels = extract(subject, text)
-            if not rels:
-                continue
-            for rel in rels:
-                self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
-                if rel["object"] and not self.lexicon.has(rel["object"]):
-                    self.lexicon.see(rel["object"])
-            return f"Got it! I learned that {subject} {m} {' '.join(post[:3])}."
-        return None
+            if pre and post:
+                subject = pre[-1]
+                if len(subject) >= 3:
+                    if not self.lexicon.has(subject) and subject not in self.definitions:
+                        self.definitions[subject] = text.strip()
+                        self.lexicon.see(subject, post[:3])
+                    rels = extract(subject, text)
+                    if rels:
+                        for rel in rels:
+                            self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
+                            if rel["object"] and not self.lexicon.has(rel["object"]):
+                                self.lexicon.see(rel["object"])
+                        return f"Got it! I learned that {subject} {svo_verb} {' '.join(post[:3])}."
+            return None
+
+        # 2. Fallback to standard relations (means, is, are, has)
+        m = None
+        for word in ("means", "is", "are", "has"):
+            if word in words:
+                m = word
+                break
+        
+        if not m:
+            return None
+
+        idx = words.index(m)
+        pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS and w not in STOPWORDS]
+        post = [w for w in words[idx+1:] if w not in NOUN_DETERMINERS and w not in STOP_TAIL]
+        
+        if not pre or not post:
+            return None
+            
+        subject = pre[-1]
+        if len(subject) < 3:
+            return None
+
+        if not self.lexicon.has(subject) and subject not in self.definitions:
+            self.definitions[subject] = text.strip()
+            self.lexicon.see(subject, post[:3])
+            
+        rels = extract(subject, text)
+        if not rels:
+            return None
+            
+        for rel in rels:
+            self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
+            if rel["object"] and not self.lexicon.has(rel["object"]):
+                self.lexicon.see(rel["object"])
+                
+        return f"Got it! I learned that {subject} {m} {' '.join(post[:3])}."
 
     def _answer_question(self, text):
         fkey = fact_query(text)

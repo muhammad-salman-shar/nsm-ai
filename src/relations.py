@@ -1,5 +1,6 @@
 import re
 import time
+from src.patterns import is_svo_verb, to_base_verb
 
 NOUN_DETERMINERS = {"a", "an", "the"}
 STOP_TAIL = {"a","an","the","of","in","on","at","to","for",
@@ -44,6 +45,15 @@ def extract(subject_word, definition_text, correction=False):
         if obj and obj != subject:
             rels.append({"type": "HAS", "subject": subject, "object": obj, "correct": is_correction})
         return rels
+
+    # SVO Extraction (e.g., salman likes mangoes)
+    for i, w in enumerate(words):
+        if is_svo_verb(w):
+            obj = _pick_head_noun(words[i+1:])
+            if obj and obj != subject:
+                base_v = to_base_verb(w)
+                rels.append({"type": base_v.upper(), "subject": subject, "object": obj, "correct": is_correction})
+            return rels
 
     if "means" in words or "mean" in words:
         i = max(words.index("means") if "means" in words else -1,
@@ -147,6 +157,12 @@ def parse_query(text):
             obj = _pick_head_noun(tail[1:])
             if subj and obj and subj != obj:
                 return ("IS", subj, obj)
+    if words[0] == "what" and len(words) >= 4 and words[1] in ("does", "do"):
+        subj = words[2]
+        verb = words[3]
+        if is_svo_verb(verb):
+            return ("SVO", subj, to_base_verb(verb))
+
     if words[0] == "does" and "have" in words:
         i = words.index("have")
         subj_cand = [w for w in words[1:i] if w not in NOUN_DETERMINERS]
