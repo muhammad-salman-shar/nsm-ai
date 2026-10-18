@@ -10,6 +10,7 @@ from src import persistence
 from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
 from src.producer import produce_svo
 from src.composer import compose_object
+from src.reasoner import transitive_inference
 from src.patterns import is_svo_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
@@ -313,6 +314,10 @@ class Brain:
                     return f"No, {subj} {verb} {', '.join(active)}, not {obj}."
                 return f"No, {subj} {verb} {obj} is outdated."
             if status == "no":
+                if rel_type == "IS":
+                    inferred, reason_msg = transitive_inference(self.relations, subj, obj)
+                    if inferred:
+                        return reason_msg
                 if detail:
                     return f"I know {subj} {verb} {', '.join(detail)}. But I don't know if {subj} {verb} {obj}."
                 return f"No, {subj} {verb} {', '.join(detail)}." if detail else f"I don't know."
