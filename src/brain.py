@@ -684,6 +684,27 @@ class Brain:
             except OSError:
                 pass
 
+    def observe_bulk(self, text):
+        from src.text_utils import split_sentences
+        sentences = split_sentences(text)
+        
+        if len(sentences) <= 1:
+            return self.observe(text)
+            
+        last_result = None
+        for s in sentences:
+            last_result = self.observe(s)
+            
+        return {
+            "turn": self.turn,
+            "text": text,
+            "intent": "bulk_learning",
+            "confidence": 1.0,
+            "mood": self.affect.mood(),
+            "recall": None,
+            "response": f"I read all {len(sentences)} sentences and learned from them! (Last update: {last_result['response']})"
+        }
+
     def state(self):
         return {
             "turn": self.turn,

@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             
             user_id = data.get("user_id", "default")
             brain = get_brain(user_id)
-            result = brain.observe(text)
+            result = brain.observe_bulk(text)
             database.save_brain(user_id, persistence.to_dict(brain))
             response_text = result["response"]
             
@@ -141,7 +141,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             user_id = data.get("user_id", "default")
             brain = get_brain(user_id)
-            result = brain.observe(text)
+            result = brain.observe_bulk(text)
             database.save_brain(user_id, persistence.to_dict(brain))
             _json_response(self, 200, result)
         elif parsed.path == "/reset":
