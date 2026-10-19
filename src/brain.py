@@ -11,6 +11,8 @@ from src.facts import extract as extract_fact, query as fact_query, format_answe
 from src.producer import produce_svo
 from src.composer import compose_object
 from src.reasoner import infer_relation
+from src.parser_v2 import parse_to_meaning
+from src.realizer import realize
 from src.patterns import is_svo_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
@@ -160,6 +162,7 @@ class Brain:
         self.lang = Language(seed=7)
         self.relations = RelationStore()
         self.fact_store = FactStore()
+        self.meanings = {}
         self.max_depth = min(int(max_depth), HARD_MAX_DEPTH)
         self._boot_perceptron(perceptron_path)
         self._seed_lexicon("data/stimuli.txt")
@@ -229,6 +232,8 @@ class Brain:
             return False
         if w in self.definitions:
             return False
+        if hasattr(self, "meanings") and w in self.meanings:
+            return False
         return True
 
     def _find_unknown(self, words):
@@ -293,6 +298,7 @@ class Brain:
                 known_meaning = (
                     target in self.definitions
                     or bool(self.relations.get("IS", target))
+                    or (hasattr(self, "meanings") and target in self.meanings)
                 )
                 if (len(target) >= 3
                         and target not in FUNCTION_WORDS
@@ -334,6 +340,14 @@ class Brain:
                     return f"I know {known_str}, but I don't know if {subj} {verb} {obj}."
                 return f"I don't have enough information about {subj} yet."
             return f"I don't know {subj} yet. Teach me?"
+        # L7: Use realizer if meaning was stored via construction
+        if _is_question_text(text) and parse_query(text) is None:
+            qw = _words(text)
+            if len(qw) >= 3 and qw[0] == "what" and qw[1] == "is":
+                target = qw[-1]
+                if target in self.meanings:
+                    return realize(self.meanings[target])
+
         lookup = self._lookup_definition(text)
         if lookup:
             return lookup
@@ -436,6 +450,13 @@ class Brain:
                 self.lexicon.see(rel["object"])
                 
         return f"Got it! I learned that {subject} {m} {' '.join(post[:3])}."
+
+    def _try_construction(self, text):
+        meaning = parse_to_meaning(text)
+        if meaning:
+            subj = meaning[1].lower()
+            self.meanings[subj] = meaning
+        return meaning
 
     def _answer_question(self, text):
         fkey = fact_query(text)
@@ -642,6 +663,9 @@ class Brain:
                 "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
                 "response": response,
             }
+
+        # L7: Construction parse (store meaning)
+        self._try_construction(text)
 
         # L2: Fact statements (my name is salman)
         fact = extract_fact(text)
