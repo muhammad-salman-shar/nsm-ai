@@ -2,44 +2,37 @@ import urllib.request
 import json
 import os
 
-# NSM Teacher Bridge - Supports Local LLMs (Ollama, LM Studio, etc.)
-# Env Vars:
-# NSM_LLM_URL: e.g. http://127.0.0.1:1234/v1/chat/completions
-# NSM_LLM_MODEL: e.g. llama3, mistral
-# NSM_LLM_KEY: Optional. Leave blank for local.
-
 DEFAULT_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "llama3-8b-8192"
 
-SYSTEM_PROMPT = """You are NSM VB, a 10-year-old virtual kid. 
-I will give you my internal raw thought or response. 
-Your job is to rewrite it into natural, conversational English, exactly like a smart 10-year-old kid would speak.
+# Strict prompt to stop hallucinations
+SYSTEM_PROMPT = """You are NSM VB, a 10-year-old kid. 
+You are talking to the USER. Rewrite the raw thought into ONE short, natural sentence. 
 RULES:
-1. Keep the EXACT same meaning and facts.
-2. Do NOT add any new information.
-3. Do NOT hallucinate.
-4. Just make it sound natural, warm, and human-like."""
+1. Do NOT add new facts. Do NOT invent stories. Do NOT make up names.
+2. NEVER pretend to be the user. If the user says "I am Salman", your response should be about THEM, not you.
+3. If raw thought says "I don't know", just say it in a friendly way.
+Output ONLY the rewritten sentence, nothing else."""
 
 def improve_language(raw_text, user_input=""):
-    # Read config from environment
     url = os.environ.get("NSM_LLM_URL", DEFAULT_URL)
     model = os.environ.get("NSM_LLM_MODEL", DEFAULT_MODEL)
     api_key = os.environ.get("NSM_LLM_KEY", "")
 
-    # If using default Groq URL and no key is provided, skip API call
     if url == DEFAULT_URL and not api_key:
         return raw_text
 
+    # Pass ONLY the raw thought, not the user input (to avoid LLM getting confused)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"User said: {user_input}\nMy raw thought: {raw_text}\nMy natural response:"}
+        {"role": "user", "content": f"Raw thought: {raw_text}"}
     ]
 
     data = {
         "model": model,
         "messages": messages,
-        "temperature": 0.5,
-        "max_tokens": 100,
+        "temperature": 0.2,  # Very low temperature (less creative, more strict)
+        "max_tokens": 50,
         "stream": False
     }
 
@@ -50,9 +43,23 @@ def improve_language(raw_text, user_input=""):
     req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers)
 
     try:
-        with urllib.request.urlopen(req, timeout=60) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             result = json.loads(response.read().decode())
-            return result["choices"][0]["message"]["content"].strip()
+            out_text = result["choices"][0]["message"]["content"].strip()
+            
+            # 1. Remove quotes if LLM added them
+            out_text = out_text.strip('"\'')
+            
+            # 2. HALLUCINATION FILTER: If output is way too long, it means LLM invented a story
+            if len(out_text) > (len(raw_text) * 2.5) + 30:
+                return raw_text
+                
+            # 3. LEAK FILTER: If LLM outputs prompt words
+            bad_words = ["raw thought", "natural response", "user said", "rewrite"]
+            if any(w in out_text.lower() for w in bad_words):
+                return raw_text
+                
+            return out_text
     except Exception as e:
         print(f"[LLM Teacher Error] {e}")
-        return raw_text # Fallback
+        return raw_text
