@@ -5,3 +5,4 @@ logs/
 .venv/
 *.npz
 tunnel.log
+data/dictionary.json
