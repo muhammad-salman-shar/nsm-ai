@@ -6,6 +6,7 @@ plugins {
 android {
     namespace 'com.nsm.vb'
     compileSdk 34
+    ndkVersion "26.1.10909125"
 
     defaultConfig {
         applicationId "com.nsm.vb"
@@ -15,17 +16,16 @@ android {
         versionName "1.0"
 
         ndk {
-            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            abiFilters "arm64-v8a", "x86_64"
         }
 
         python {
-            buildPython "python3"
+            buildPython "python"
             pip {
                 install "numpy"
             }
         }
     }
-    
     buildTypes {
         release {
             minifyEnabled false
