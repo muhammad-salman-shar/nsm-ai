@@ -5,7 +5,7 @@ from src.memory import Lexicon, EpisodicMemory
 from src.perceptron import Perceptron, TRAINING_DATA
 from src.language import Language
 from src.relations import (extract, parse_query, RelationStore,
-                           CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL)
+                           CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL, AUX_VERBS)
 from src import persistence
 from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
 from src.producer import produce_svo
@@ -223,7 +223,9 @@ class Brain:
             return False
         if len(w) < 3:
             return False
-        if self.lexicon.has(w):
+        if self.lexicon.has(w) or self.lexicon.has(w + "s") or self.lexicon.has(w + "es"):
+            return False
+        if w.endswith("s") and (self.lexicon.has(w[:-1]) or self.lexicon.has(w[:-2])):
             return False
         if w in self.definitions:
             return False
@@ -260,11 +262,16 @@ class Brain:
         q = _words(text)
         if not any(w in ("what","who","tell","explain","define") for w in q):
             return None
-        for w in q:
-            if w in self.definitions:
-                return f"{w} means: {self.definitions[w]}"
-            if self.relations.get("IS", w):
-                return f"I know {w} is related to {', '.join(self.relations.get('IS', w))}."
+        
+        # Don't hijack SVO queries like "what does salman eat"
+        if parse_query(text) is not None:
+            return None
+            
+        target = q[-1]
+        if target in self.definitions:
+            return f"{target} means: {self.definitions[target]}"
+        if self.relations.get("IS", target):
+            return f"I know {target} is related to {', '.join(self.relations.get('IS', target))}."
         return None
 
     def _generate(self, intent, conf, text, recall):
@@ -279,7 +286,7 @@ class Brain:
             self.affect.event("rewarded", intensity=0.5)
             return f"The answer is {math}."
         # L2.5: what is X where X is known-but-undefined -> ask user
-        if _is_question_text(text):
+        if _is_question_text(text) and parse_query(text) is None:
             qw = _words(text)
             if qw and qw[0] == "what" and len(qw) >= 3:
                 target = qw[-1]
@@ -378,7 +385,7 @@ class Brain:
                 
         if svo_verb:
             idx = words.index(svo_verb)
-            pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS]
+            pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS and w not in AUX_VERBS]
             post = [w for w in words[idx+1:] if w not in NOUN_DETERMINERS and w not in STOP_TAIL]
             if pre and post:
                 subject = pre[-1]

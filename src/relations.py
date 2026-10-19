@@ -3,6 +3,7 @@ import time
 from src.patterns import is_svo_verb, to_base_verb
 
 NOUN_DETERMINERS = {"a", "an", "the"}
+AUX_VERBS = {"is","am","are","was","were","will","shall","has","have","had","do","does","did"}
 STOP_TAIL = {"a","an","the","of","in","on","at","to","for",
              "with","by","from","and","or","but","is","are"}
 
