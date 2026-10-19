@@ -13,6 +13,7 @@ from src.composer import compose_object
 from src.reasoner import infer_relation
 from src.parser_v2 import parse_to_meaning
 from src.realizer import realize, get_article
+from src.llm_teacher import improve_language
 from src.patterns import is_svo_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
@@ -585,6 +586,13 @@ class Brain:
     def observe(self, text):
         self.turn += 1
         result = self._observe_inner(text)
+        
+        # LLM Teacher Integration (if API key exists, otherwise returns raw)
+        if result and result.get("response"):
+            raw_thought = result["response"]
+            result["raw_thought"] = raw_thought
+            result["response"] = improve_language(raw_thought, text)
+            
         self._maybe_save()
         return result
 
