@@ -76,6 +76,7 @@ _QUESTION_STARTERS = {
 
 def _build_stopwords():
     words = set(_GRAMMAR) | set(_COMMON_VERBS)
+    words.update(["alive", "dead", "awake", "asleep"])
     for text, _ in TRAINING_DATA:
         for w in re.findall(r"[a-z]+", text.lower()):
             words.add(w)
@@ -262,6 +263,8 @@ class Brain:
         for w in q:
             if w in self.definitions:
                 return f"{w} means: {self.definitions[w]}"
+            if self.relations.get("IS", w):
+                return f"I know {w} is related to {', '.join(self.relations.get('IS', w))}."
         return None
 
     def _generate(self, intent, conf, text, recall):
@@ -379,9 +382,8 @@ class Brain:
             if pre and post:
                 subject = pre[-1]
                 if len(subject) >= 3:
-                    if not self.lexicon.has(subject) and subject not in self.definitions:
-                        self.definitions[subject] = text.strip()
-                        self.lexicon.see(subject, post[:3])
+                    self.definitions[subject] = text.strip()
+                    self.lexicon.see(subject, post[:3])
                     rels = extract(subject, text)
                     if rels:
                         for rel in rels:
@@ -413,9 +415,8 @@ class Brain:
         if len(subject) < 3:
             return None
 
-        if not self.lexicon.has(subject) and subject not in self.definitions:
-            self.definitions[subject] = text.strip()
-            self.lexicon.see(subject, post[:3])
+        self.definitions[subject] = text.strip()
+        self.lexicon.see(subject, post[:3])
             
         rels = extract(subject, text)
         if not rels:
@@ -473,9 +474,15 @@ class Brain:
                         if w != w_lower and self._is_unknown(w)]
 
         if word is None:
-            key = f"_phrase:{original.lower()[:40]}"
-            self.definitions[key] = definition
-            label = "phrase"
+            # If it's a phrase, try to extract the core subject from the original text
+            # e.g., "human is specie" -> subject is "human"
+            original_words = _words(original)
+            subject = original_words[0] if original_words else "phrase"
+            self.definitions[subject] = definition
+            label = subject
+            self.lexicon.see(subject, _words(definition)[:3])
+            for rel in extract(subject, definition):
+                self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
         else:
             self.definitions[word] = definition
             label = word
