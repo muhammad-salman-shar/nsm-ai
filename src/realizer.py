@@ -8,8 +8,13 @@ def realize(meaning):
     
     if m_type == "IS_A":
         subj, obj = meaning[1], meaning[2]
-        article = get_article(obj)
-        return f"{subj.capitalize()} is {article} {obj}."
+        is_plural = (len(meaning) > 3 and meaning[3] == "plural") or subj.endswith("s")
+        
+        if is_plural:
+            return f"{subj.capitalize()} are {obj}."
+        else:
+            article = get_article(obj)
+            return f"{subj.capitalize()} is {article} {obj}."
         
     elif m_type == "NOT_IS_A":
         subj, obj = meaning[1], meaning[2]

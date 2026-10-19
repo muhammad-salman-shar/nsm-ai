@@ -18,7 +18,7 @@ def parse_to_meaning(text):
     words = re.findall(r"[a-zA-Z']+", text.lower())
     if not words: return None
     
-    # 1. IS_A: [SUBJ] is a/an [OBJ]
+    # 1. IS_A: [SUBJ] is a/an [OBJ] OR [SUBJ] are [OBJ]
     det = None
     if "a" in words: det = "a"
     elif "an" in words: det = "an"
@@ -28,6 +28,10 @@ def parse_to_meaning(text):
         idx_det = words.index(det)
         if idx_is == 1 and idx_det == 2 and len(words) == 4:
             return ("IS_A", words[0], words[3])
+            
+    # Plural handling: dogs are animals
+    if "are" in words and len(words) == 3:
+        return ("IS_A", words[0], words[2], "plural")
             
     # Negation: [SUBJ] is not a [OBJ]
     if "is" in words and "not" in words and ("a" in words or "an" in words):
