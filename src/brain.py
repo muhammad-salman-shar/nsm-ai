@@ -15,6 +15,7 @@ from src.parser_v2 import parse_to_meaning
 from src.realizer import realize, get_article
 from src.llm_teacher import improve_language
 from src.patterns import is_svo_verb
+from src.morphology import conjugate_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
@@ -725,6 +726,32 @@ class Brain:
                 "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
                 "response": ask_resp,
             }
+
+        # L4 Grammar Monster Queries (WH, Yes/No, Negation)
+        meaning = parse_to_meaning(text)
+        if meaning:
+            if meaning[0] == "SVO_QUERY":
+                subj, verb = meaning[1], meaning[2]
+                objs = self.relations.get(verb.upper(), subj)
+                if objs:
+                    v = conjugate_verb(verb, "present", subj)
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"{subj.capitalize()} {v} {objs[0]}."}
+                return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"I don't know what {subj} {conjugate_verb(verb, 'present', subj)}."}
+
+            elif meaning[0] == "SVO_YESNO":
+                subj, verb = meaning[1], meaning[2]
+                obj = meaning[3] if len(meaning) > 3 else None
+                objs = self.relations.get(verb.upper(), subj)
+                if obj and obj in objs:
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Yes, {subj} {conjugate_verb(verb, 'present', subj)} {obj}."}
+                elif obj:
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"No, {subj} does not {verb} {obj}."}
+                else:
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"I'm not sure."}
+
+            elif meaning[0] == "NOT_SVO":
+                subj, verb, obj = meaning[1], meaning[2], meaning[3]
+                return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it. I will remember that {subj} does not {verb} {obj}."}
 
         if self.pending and _is_question_text(text):
             self.pending = None
