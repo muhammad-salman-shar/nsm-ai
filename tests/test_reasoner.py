@@ -1,6 +1,6 @@
 import unittest
 from src.relations import RelationStore
-from src.reasoner import transitive_inference
+from src.reasoner import infer_relation
 
 class TestReasoner(unittest.TestCase):
     def setUp(self):
@@ -10,16 +10,16 @@ class TestReasoner(unittest.TestCase):
         self.rs.add("IS", "human", "mortal")
 
     def test_direct_inference(self):
-        success, msg = transitive_inference(self.rs, "salman", "human")
+        success, msg = infer_relation(self.rs, "salman", "IS", "human")
         self.assertTrue(success)
 
-    def test_transitive_inference(self):
-        success, msg = transitive_inference(self.rs, "salman", "mortal")
+    def test_infer_relation(self):
+        success, msg = infer_relation(self.rs, "salman", "IS", "mortal")
         self.assertTrue(success)
         self.assertIn("because salman is human and human is mortal", msg)
 
     def test_failed_inference(self):
-        success, msg = transitive_inference(self.rs, "salman", "bird")
+        success, msg = infer_relation(self.rs, "salman", "IS", "bird")
         self.assertFalse(success)
 
 if __name__ == "__main__":

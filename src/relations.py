@@ -55,6 +55,13 @@ def extract(subject_word, definition_text, correction=False):
                 rels.append({"type": base_v.upper(), "subject": subject, "object": obj, "correct": is_correction})
             return rels
 
+    if "can" in words:
+        i = words.index("can")
+        obj = _pick_head_noun(words[i + 1:])
+        if obj and obj != subject:
+            rels.append({"type": "CAN", "subject": subject, "object": obj, "correct": is_correction})
+        return rels
+
     if "means" in words or "mean" in words:
         i = max(words.index("means") if "means" in words else -1,
                 words.index("mean") if "mean" in words else -1)
@@ -119,6 +126,9 @@ class RelationStore:
     def query(self, rel_type, subject, obj):
         bucket = self.relations.get((rel_type, subject))
         if not bucket:
+            has_subject = any(s == subject for (t, s) in self.relations.keys())
+            if has_subject:
+                return ("no", [])
             return ("unknown_subject", None)
         target = bucket.get(obj)
         if target and not target["superseded"]:
@@ -162,6 +172,18 @@ def parse_query(text):
         verb = words[3]
         if is_svo_verb(verb):
             return ("SVO", subj, to_base_verb(verb))
+
+    if words[0] == "can" and len(words) >= 3:
+        subj = words[1]
+        obj = _pick_head_noun(words[2:])
+        if subj and obj:
+            return ("CAN", subj, obj)
+            
+    if words[0] == "does" and len(words) >= 3 and "have" not in words:
+        subj = words[1]
+        obj = _pick_head_noun(words[2:])
+        if subj and obj:
+            return ("CAN", subj, obj)
 
     if words[0] == "does" and "have" in words:
         i = words.index("have")

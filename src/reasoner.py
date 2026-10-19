@@ -1,21 +1,22 @@
-def transitive_inference(relations_store, subject, target_property):
+def infer_relation(relations_store, subject, rel_type, target):
     """
-    Checks if subject -> target_property can be inferred through a chain.
-    Example: 
-    Subject: salman
-    Relations: salman IS human, human IS mortal
-    Query: is salman mortal?
+    Infers if subject has relation rel_type with target.
+    Handles:
+    - Direct: subject -> rel_type -> target
+    - Transitive via IS: subject -> IS -> category -> rel_type -> target
     """
     # 1. Direct check
-    direct = relations_store.get("IS", subject)
-    if target_property in direct:
-        return True, f"{subject} is {target_property}."
+    direct = relations_store.get(rel_type, subject)
+    if target in direct:
+        verb = {"IS": "is", "CAN": "can", "HAS": "has"}.get(rel_type, rel_type.lower())
+        return True, f"{subject} {verb} {target}."
 
-    # 2. One-level transitive check (A -> B -> C)
-    for intermediate in direct:
-        # Skip generic objects if they don't have further relations
-        indirect = relations_store.get("IS", intermediate)
-        if target_property in indirect:
-            return True, f"Yes, because {subject} is {intermediate} and {intermediate} is {target_property}."
-            
+    # 2. One-level transitive check via IS
+    categories = relations_store.get("IS", subject)
+    for category in categories:
+        cat_rels = relations_store.get(rel_type, category)
+        if target in cat_rels:
+            verb = {"IS": "is", "CAN": "can", "HAS": "has"}.get(rel_type, rel_type.lower())
+            return True, f"Yes, because {subject} is {category} and {category} {verb} {target}."
+
     return False, None

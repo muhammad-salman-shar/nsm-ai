@@ -10,7 +10,7 @@ from src import persistence
 from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
 from src.producer import produce_svo
 from src.composer import compose_object
-from src.reasoner import transitive_inference
+from src.reasoner import infer_relation
 from src.patterns import is_svo_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
@@ -307,7 +307,8 @@ class Brain:
                     return produce_svo(subj, obj, composed_obj)
                 return f"I don't know what {subj} {obj}s."
 
-            verb = "is" if rel_type == "IS" else "has"
+            verb_map = {"IS": "is", "HAS": "has", "CAN": "can"}
+            verb = verb_map.get(rel_type, "is")
             status, detail = self.relations.query(rel_type, subj, obj)
             if status == "yes":
                 return f"Yes, {subj} {verb} {obj}."
@@ -317,10 +318,9 @@ class Brain:
                     return f"No, {subj} {verb} {', '.join(active)}, not {obj}."
                 return f"No, {subj} {verb} {obj} is outdated."
             if status == "no":
-                if rel_type == "IS":
-                    inferred, reason_msg = transitive_inference(self.relations, subj, obj)
-                    if inferred:
-                        return reason_msg
+                inferred, reason_msg = infer_relation(self.relations, subj, rel_type, obj)
+                if inferred:
+                    return reason_msg
                 if detail:
                     known_str = f"{subj} {verb} {detail[0]}" if len(detail) == 1 else f"{subj} {verb} {', '.join(detail[:-1])} or {detail[-1]}"
                     return f"I know {known_str}, but I don't know if {subj} {verb} {obj}."
@@ -396,7 +396,7 @@ class Brain:
 
         # 2. Fallback to standard relations (means, is, are, has)
         m = None
-        for word in ("means", "is", "are", "has"):
+        for word in ("means", "is", "are", "has", "can"):
             if word in words:
                 m = word
                 break
