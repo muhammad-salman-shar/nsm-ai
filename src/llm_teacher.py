@@ -2,10 +2,12 @@ import urllib.request
 import json
 import os
 
-# NSM Teacher Bridge
-# By default, it uses Groq API (Free & Fast), but can work with any OpenAI-compatible endpoint.
+# NSM Teacher Bridge - Supports Local LLMs (Ollama, LM Studio, etc.)
+# Env Vars:
+# NSM_LLM_URL: e.g. http://127.0.0.1:1234/v1/chat/completions
+# NSM_LLM_MODEL: e.g. llama3, mistral
+# NSM_LLM_KEY: Optional. Leave blank for local.
 
-API_KEY_ENV = "NSM_LLM_KEY"
 DEFAULT_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "llama3-8b-8192"
 
@@ -19,9 +21,13 @@ RULES:
 4. Just make it sound natural, warm, and human-like."""
 
 def improve_language(raw_text, user_input=""):
-    api_key = os.environ.get(API_KEY_ENV)
-    if not api_key:
-        # Fallback: No API key, return raw text
+    # Read config from environment
+    url = os.environ.get("NSM_LLM_URL", DEFAULT_URL)
+    model = os.environ.get("NSM_LLM_MODEL", DEFAULT_MODEL)
+    api_key = os.environ.get("NSM_LLM_KEY", "")
+
+    # If using default Groq URL and no key is provided, skip API call
+    if url == DEFAULT_URL and not api_key:
         return raw_text
 
     messages = [
@@ -30,21 +36,23 @@ def improve_language(raw_text, user_input=""):
     ]
 
     data = {
-        "model": DEFAULT_MODEL,
+        "model": model,
         "messages": messages,
         "temperature": 0.5,
-        "max_tokens": 100
+        "max_tokens": 100,
+        "stream": False
     }
 
-    req = urllib.request.Request(DEFAULT_URL, data=json.dumps(data).encode(), headers={
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    })
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers)
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             result = json.loads(response.read().decode())
             return result["choices"][0]["message"]["content"].strip()
     except Exception as e:
         print(f"[LLM Teacher Error] {e}")
-        return raw_text # Fallback to raw brain text if API fails
+        return raw_text # Fallback
