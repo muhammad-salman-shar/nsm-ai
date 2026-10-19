@@ -33,34 +33,14 @@ def to_base_verb(word):
     base = get_base_verb(word)
     return base if base else word.lower()
 
+from src.morphology import conjugate_verb
+
 def conjugate(verb, subject):
-    """Returns the correct present-tense form of the verb for the subject."""
-    subj = subject.lower()
-    v = verb.lower()
-
-    # 1st/2nd person or plural -> base form
-    if subj in ("i", "you", "we", "they"):
-        return v
-
-    # 3rd person singular (he, she, it, salman, dog, etc.)
-    if v.endswith("s") or v.endswith("sh") or v.endswith("ch") or v.endswith("x") or v.endswith("o"):
-        return v + "es"
-    elif v.endswith("y") and len(v) > 1 and v[-2] not in "aeiou":
-        return v[:-1] + "ies"
-    else:
-        return v + "s"
+    """Wrapper for backward compatibility."""
+    return conjugate_verb(verb, tense="present", subject=subject)
 
 
 
-
-def conjugate_past(verb):
-    v = verb.lower()
-    if v.endswith("e"): return v + "d"
-    if v.endswith("y") and v[-2] not in "aeiou": return v[:-1] + "ied"
-    # Common irregular verbs
-    irregulars = {"eat": "ate", "go": "went", "see": "saw", "run": "ran", "do": "did", "have": "had", "make": "made", "take": "took", "is": "was", "are": "were"}
-    if v in irregulars: return irregulars[v]
-    return v + "ed"
 
 def get_tense_and_base(word):
     """Returns (base_verb, tense). Handles will eat, is eating, ate, etc."""
