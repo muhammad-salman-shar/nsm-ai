@@ -6,7 +6,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="NSM VB"
+        android:label="NSM VB" android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:usesCleartextTraffic="true">

@@ -25,15 +25,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (!Python.isStarted()) {
-            Python.start(new AndroidPlatform(this));
-        }
-
-        new Thread(() -> {
-            PyObject pyServer = Python.getInstance().getModule("app_server");
-            pyServer.callAttr("start_server");
-        }).start();
-
         webView = new WebView(this);
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -45,23 +36,39 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                if (mUploadMessage != null) {
-                    mUploadMessage.onReceiveValue(null);
-                }
+                if (mUploadMessage != null) mUploadMessage.onReceiveValue(null);
                 mUploadMessage = filePathCallback;
                 Intent intent = fileChooserParams.createIntent();
-                try {
-                    startActivityForResult(intent, FILECHOOSER_RESULTCODE);
-                } catch (Exception e) {
-                    mUploadMessage = null;
-                    return false;
-                }
+                try { startActivityForResult(intent, FILECHOOSER_RESULTCODE); } 
+                catch (Exception e) { mUploadMessage = null; return false; }
                 return true;
             }
         });
 
         setContentView(webView);
-        webView.postDelayed(() -> webView.loadUrl("http://127.0.0.1:8081"), 2000);
+
+        // Show Loading Screen
+        String loadingHtml = "<html><body style='background:#0d1117;color:white;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;text-align:center;'>" +
+                "<div><h2>NSM VB</h2><p>Starting Brain Engine...</p><p id='err' style='color:red;font-size:12px;'></p></div>" +
+                "</body></html>";
+        webView.loadData(loadingHtml, "text/html", "UTF-8");
+
+        // Start Python Server
+        new Thread(() -> {
+            try {
+                if (!Python.isStarted()) {
+                    Python.start(new AndroidPlatform(this));
+                }
+                PyObject pyServer = Python.getInstance().getModule("app_server");
+                pyServer.callAttr("start_server");
+            } catch (Exception e) {
+                final String err = e.toString();
+                runOnUiThread(() -> webView.evaluateJavascript("document.getElementById('err').innerText = '" + err + "';", null));
+            }
+        }).start();
+
+        // Retry loading the page after 3 seconds
+        webView.postDelayed(() -> webView.loadUrl("http://127.0.0.1:8081"), 3000);
     }
 
     @Override
@@ -71,9 +78,7 @@ public class MainActivity extends AppCompatActivity {
             Uri[] results = null;
             if (resultCode == Activity.RESULT_OK && data != null) {
                 String dataString = data.getDataString();
-                if (dataString != null) {
-                    results = new Uri[]{Uri.parse(dataString)};
-                }
+                if (dataString != null) results = new Uri[]{Uri.parse(dataString)};
             }
             mUploadMessage.onReceiveValue(results);
             mUploadMessage = null;
