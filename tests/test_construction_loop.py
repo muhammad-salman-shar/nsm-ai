@@ -22,7 +22,8 @@ class TestConstructionLoop(unittest.TestCase):
     def test_svo_loop(self):
         text = "salman likes mango"
         meaning = parse_to_meaning(text)
-        self.assertEqual(meaning, ("SVO", "salman", "likes", "mango"))
+        # Now includes tense: ("SVO", subj, verb, obj, "present")
+        self.assertEqual(meaning, ("SVO", "salman", "likes", "mango", "present"))
         
         out = realize(meaning)
         self.assertEqual(out, "Salman likes mango.")

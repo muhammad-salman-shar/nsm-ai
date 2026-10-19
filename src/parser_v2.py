@@ -1,5 +1,18 @@
 import re
 from src.constructions import CONSTRUCTIONS
+from src.patterns import get_base_verb
+
+def detect_tense(verb):
+    v = verb.lower()
+    from src.patterns import IRREGULAR_PAST
+    if v in IRREGULAR_PAST:
+        return "past"
+    if v in ("will", "shall"):
+        return "future"
+    if v.endswith("ed"):
+        return "past"
+    return "present"
+
 
 def parse_to_meaning(text):
     words = re.findall(r"[a-zA-Z']+", text.lower())
@@ -32,6 +45,11 @@ def parse_to_meaning(text):
         
     # 3. SVO: [SUBJ] [VERB] [OBJ]
     if len(words) == 3:
-        return ("SVO", words[0], words[1], words[2])
+        tense = detect_tense(words[1])
+        return ("SVO", words[0], words[1], words[2], tense)
+        
+    # Future tense: [SUBJ] will [VERB] [OBJ] (4 words)
+    if len(words) == 4 and words[1] in ("will", "shall"):
+        return ("SVO", words[0], words[2], words[3], "future")
 
     return None
