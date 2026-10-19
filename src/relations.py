@@ -38,6 +38,10 @@ def extract(subject_word, definition_text, correction=False):
     if not words:
         return []
 
+    # Skip negation (tiger is not bird) - don't corrupt positive memory
+    if "not" in words and len(words) >= 2 and words[0] in ("is", "are", "am"):
+        return []
+
     rels = []
 
     if "has" in words:

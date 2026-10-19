@@ -456,7 +456,7 @@ class Brain:
     def _try_construction(self, text):
         meaning = parse_to_meaning(text)
         # Only store statements, not questions
-        if meaning and meaning[0] in ("IS_A", "IS_PROP", "SVO", "NOT_IS_A"):
+        if meaning and meaning[0] in ("IS_A", "IS_PROP", "SVO"):
             subj = meaning[1].lower()
             self.meanings[subj] = meaning
         return meaning
