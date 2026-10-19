@@ -282,7 +282,7 @@ class Brain:
 
     def _generate(self, intent, conf, text, recall):
         t_low = text.lower()
-        if "your name" in t_low or "who are you" in t_low:
+        if "your name" in t_low or "who are you" in t_low or "what are you" in t_low:
             return f"I am {self.personality.NAME}, built by {self.personality.BUILDER}."
         if "your age" in t_low or "how old are you" in t_low:
             return f"I am {self.personality.AGE} years old."
@@ -632,7 +632,88 @@ class Brain:
         import random
         return random.choice(self.ASK_BANK)
 
+    def _try_remember(self, text):
+        m = re.match(r"^remember(?:\s+this|\s+that)?[:,]?\s+(.*)", text, re.IGNORECASE)
+        if not m:
+            return None
+            
+        payload = m.group(1).strip()
+        if not payload:
+            return "Remember what? Please tell me."
+            
+        # Replace "you" with "NSM" so it learns correctly about itself
+        import re as _re
+        payload_clean = _re.sub(r'\byou are\b', 'NSM is', payload, flags=_re.IGNORECASE)
+        payload_clean = _re.sub(r'\byour\b', "NSM's", payload_clean, flags=_re.IGNORECASE)
+        payload_clean = _re.sub(r'\byou\b', 'NSM', payload_clean, flags=_re.IGNORECASE)
+        
+        # Pass it to the normal brain pipeline to learn it
+        self._observe_inner(payload_clean)
+        
+        return f"Got it! I will remember: '{payload}'."
+
+    def _try_forget(self, text):
+        t_low = text.lower().strip()
+        m = re.match(r"^(forget|delete|remove)\s+(?:my\s+|about\s+)?([a-zA-Z]+)", t_low)
+        if not m:
+            return None
+            
+        target = m.group(2)
+        
+        # 1. Forget Name/Facts
+        if target == "name":
+            self.fact_store.facts.pop("name", None)
+            return "Got it. I forgot your name."
+        elif target in self.fact_store.facts:
+            del self.fact_store.facts[target]
+            return f"Got it. I forgot your {target}."
+            
+        # 2. Forget general words/definitions/meanings
+        if target in self.definitions:
+            del self.definitions[target]
+        if target in self.meanings:
+            del self.meanings[target]
+        if target in self.lexicon.words:
+            del self.lexicon.words[target]
+            
+        # 3. Forget relations
+        keys_to_del = []
+        for (rel_type, subj), bucket in self.relations.relations.items():
+            if subj == target:
+                keys_to_del.append((rel_type, subj))
+            else:
+                if target in bucket:
+                    del bucket[target]
+        for k in keys_to_del:
+            del self.relations.relations[k]
+            
+        return f"Got it. I forgot everything about '{target}'."
+
     def _observe_inner(self, text):
+        # L9: Remember System (Highest Priority)
+        remember_resp = self._try_remember(text)
+        if remember_resp:
+            self.affect.event("rewarded", intensity=0.8)
+            self.affect.tick()
+            self.episodic.store(text, self.affect.mood(), remember_resp, 1.0)
+            return {
+                "turn": self.turn, "text": text, "intent": "statement",
+                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                "response": remember_resp,
+            }
+
+        # L9: Forget System (Highest Priority)
+        forget_resp = self._try_forget(text)
+        if forget_resp:
+            self.affect.event("punished", intensity=0.5)
+            self.affect.tick()
+            self.episodic.store(text, self.affect.mood(), forget_resp, 1.0)
+            return {
+                "turn": self.turn, "text": text, "intent": "statement",
+                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                "response": forget_resp,
+            }
+
         # L2.5-B: Ask me something (highest priority, overrides pending)
         ask_resp = self._try_ask(text)
         if ask_resp:
