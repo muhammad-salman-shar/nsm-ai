@@ -3,7 +3,7 @@
 CONSTRUCTIONS = [
     {
         "id": "IS_A",
-        "form": "[SUBJ] is a [OBJ]",
+        "form": "[SUBJ] is a/an [OBJ]",
         "meaning": ("IS_A", "{SUBJ}", "{OBJ}"),
         "pos": {"SUBJ": "noun", "OBJ": "noun"}
     },
@@ -18,5 +18,17 @@ CONSTRUCTIONS = [
         "form": "[SUBJ] [VERB] [OBJ]",
         "meaning": ("SVO", "{SUBJ}", "{VERB}", "{OBJ}"),
         "pos": {"SUBJ": "noun", "VERB": "verb", "OBJ": "noun"}
+    },
+    {
+        "id": "NOT_IS_A",
+        "form": "[SUBJ] is not a/an [OBJ]",
+        "meaning": ("NOT_IS_A", "{SUBJ}", "{OBJ}"),
+        "pos": {"SUBJ": "noun", "OBJ": "noun"}
+    },
+    {
+        "id": "Q_IS_A",
+        "form": "Is [SUBJ] a/an [OBJ]?",
+        "meaning": ("Q_IS_A", "{SUBJ}", "{OBJ}"),
+        "pos": {"SUBJ": "noun", "OBJ": "noun"}
     }
 ]

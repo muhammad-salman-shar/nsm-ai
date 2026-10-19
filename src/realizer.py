@@ -15,6 +15,16 @@ def realize(meaning):
         article = get_article(obj)
         return f"{subj.capitalize()} is {article} {obj}."
         
+    elif m_type == "NOT_IS_A":
+        subj, obj = meaning[1], meaning[2]
+        article = get_article(obj)
+        return f"{subj.capitalize()} is not {article} {obj}."
+        
+    elif m_type == "Q_IS_A":
+        subj, obj = meaning[1], meaning[2]
+        article = get_article(obj)
+        return f"Is {subj.lower()} {article} {obj}?"
+
     elif m_type == "IS_PROP":
         subj, adj = meaning[1], meaning[2]
         return f"{subj.capitalize()} is {adj}."

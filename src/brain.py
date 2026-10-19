@@ -12,7 +12,7 @@ from src.producer import produce_svo
 from src.composer import compose_object
 from src.reasoner import infer_relation
 from src.parser_v2 import parse_to_meaning
-from src.realizer import realize
+from src.realizer import realize, get_article
 from src.patterns import is_svo_verb
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
@@ -324,6 +324,8 @@ class Brain:
             verb = verb_map.get(rel_type, "is")
             status, detail = self.relations.query(rel_type, subj, obj)
             if status == "yes":
+                if rel_type == "IS":
+                    return f"Yes, {subj} is {get_article(obj)} {obj}."
                 return f"Yes, {subj} {verb} {obj}."
             if status == "superseded":
                 active = self.relations.get(rel_type, subj)
@@ -453,7 +455,8 @@ class Brain:
 
     def _try_construction(self, text):
         meaning = parse_to_meaning(text)
-        if meaning:
+        # Only store statements, not questions
+        if meaning and meaning[0] in ("IS_A", "IS_PROP", "SVO", "NOT_IS_A"):
             subj = meaning[1].lower()
             self.meanings[subj] = meaning
         return meaning
