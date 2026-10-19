@@ -322,6 +322,7 @@ class Brain:
                 if inferred:
                     return reason_msg
                 if detail:
+                    # If it's CAN, we say "I know dog can bark" not "dog is bark"
                     known_str = f"{subj} {verb} {detail[0]}" if len(detail) == 1 else f"{subj} {verb} {', '.join(detail[:-1])} or {detail[-1]}"
                     return f"I know {known_str}, but I don't know if {subj} {verb} {obj}."
                 return f"I don't have enough information about {subj} yet."

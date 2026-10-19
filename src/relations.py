@@ -174,10 +174,12 @@ def parse_query(text):
             return ("SVO", subj, to_base_verb(verb))
 
     if words[0] == "can" and len(words) >= 3:
-        subj = words[1]
-        obj = _pick_head_noun(words[2:])
-        if subj and obj:
-            return ("CAN", subj, obj)
+        core_words = [w for w in words[1:] if w not in NOUN_DETERMINERS]
+        if len(core_words) >= 2:
+            subj = core_words[0]
+            obj = _pick_head_noun(core_words[1:])
+            if subj and obj:
+                return ("CAN", subj, obj)
             
     if words[0] == "does" and len(words) >= 3 and "have" not in words:
         subj = words[1]
