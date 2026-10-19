@@ -466,6 +466,22 @@ class Brain:
         word, original = self.pending
         self.pending = None
         definition = text.strip()
+        # Strip prefixes like "remember this" and trailing quotes
+        definition = re.sub(r'^(remember this|remember|learn this|learn|note this)[\s:]+', '', definition, flags=re.I)
+        definition = definition.strip('"\' ')
+        
+        # Pivot logic: If user gave a definition for a different word
+        def_words = _words(definition)
+        if def_words:
+            first_word = def_words[0]
+            if (word and first_word != word.lower() and len(first_word) >= 3 
+                and first_word not in FUNCTION_WORDS 
+                and any(w in def_words[1:4] for w in ("is", "are", "means", "has"))):
+                # User pivoted to a new subject, process this new sentence independently
+                self.pending = None
+                self._reset_chain()
+                return self._observe_inner(definition)
+                
         w_lower = (word or "").lower()
 
         def_unknown = [w for w in _words(definition)
