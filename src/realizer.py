@@ -45,5 +45,26 @@ def realize(meaning):
         else:
             v = conjugate_verb(base_v, tense="present", subject=subj)
             return f"{subj.capitalize()} {v} {obj}."
+            
+    elif m_type == "NOT_SVO":
+        subj, verb, obj = meaning[1], meaning[2], meaning[3]
+        aux = conjugate_verb("do", "present", subj)
+        base_v = to_base_verb(verb) or verb
+        obj_str = f" {obj}" if obj else ""
+        return f"{subj.capitalize()} {aux} not {base_v}{obj_str}."
+        
+    elif m_type == "SVO_QUERY":
+        subj, verb = meaning[1], meaning[2]
+        aux = conjugate_verb("do", "present", subj)
+        base_v = to_base_verb(verb) or verb
+        return f"What {aux} {subj} {base_v}?"
+        
+    elif m_type == "SVO_YESNO":
+        subj, verb = meaning[1], meaning[2]
+        obj = meaning[3] if len(meaning) > 3 and meaning[3] else None
+        aux = conjugate_verb("do", "present", subj)
+        base_v = to_base_verb(verb) or verb
+        obj_str = f" {obj}" if obj else ""
+        return f"{aux.capitalize()} {subj} {base_v}{obj_str}?"
         
     return ""

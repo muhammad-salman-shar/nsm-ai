@@ -57,4 +57,28 @@ def parse_to_meaning(text):
     if len(words) == 4 and words[1] in ("will", "shall"):
         return ("SVO", words[0], words[2], words[3], "future")
 
+    # 1. Negation: [SUBJ] do/does/did not [VERB] [OBJ]
+    if "not" in words and any(w in ("do", "does", "did") for w in words):
+        try:
+            aux_idx = next(i for i, w in enumerate(words) if w in ("do", "does", "did"))
+            subj = words[aux_idx - 1] if aux_idx > 0 else "i"
+            verb = words[aux_idx + 2] if len(words) > aux_idx + 2 else "do"
+            obj = words[aux_idx + 3] if len(words) > aux_idx + 3 else None
+            return ("NOT_SVO", normalize_pronoun(subj), verb, obj)
+        except IndexError:
+            pass
+
+    # 2. WH-Question: What does [SUBJ] [VERB]?
+    if words[0] == "what" and len(words) >= 4 and words[1] in ("do", "does", "did"):
+        subj = words[2]
+        verb = words[3]
+        return ("SVO_QUERY", normalize_pronoun(subj), verb)
+
+    # 3. Yes/No Question: Does [SUBJ] [VERB] [OBJ]?
+    if words[0] in ("do", "does", "did") and len(words) >= 3:
+        subj = words[1]
+        verb = words[2]
+        obj = words[3] if len(words) > 3 else None
+        return ("SVO_YESNO", normalize_pronoun(subj), verb, obj)
+
     return None

@@ -77,6 +77,11 @@ def conjugate_verb(base_verb, tense="present", subject="it"):
         if v == "have":
             if subj in ("i", "you", "we", "they") or subj.endswith("s"): return "have"
             return "has"
+        if v == "do":
+            if subj in ("i", "you", "we", "they") or subj.endswith("s"): return "do"
+            return "does"
+        if v == "did":
+            return "did"
             
         # 1st/2nd person or plural subjects take base form
         if subj in ("i", "you", "we", "they") or subj.endswith("s"):
