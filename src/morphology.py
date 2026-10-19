@@ -70,6 +70,14 @@ def conjugate_verb(base_verb, tense="present", subject="it"):
         return f"will {v}"
 
     else: # present
+        if v == "be":
+            if subj == "i": return "am"
+            if subj in ("you", "we", "they") or subj.endswith("s"): return "are"
+            return "is"
+        if v == "have":
+            if subj in ("i", "you", "we", "they") or subj.endswith("s"): return "have"
+            return "has"
+            
         # 1st/2nd person or plural subjects take base form
         if subj in ("i", "you", "we", "they") or subj.endswith("s"):
             return v
@@ -86,3 +94,10 @@ def get_pronoun(word, case="nominative"):
     if w in PRONOUNS:
         return PRONOUNS[w].get(case, word)
     return word
+
+
+def normalize_pronoun(word):
+    """Converts me/my/him to i/he for consistent parsing."""
+    w = word.lower().strip()
+    mapping = {"me": "i", "my": "i", "mine": "i", "him": "he", "his": "he", "her": "she", "hers": "she", "them": "they", "their": "they", "us": "we", "our": "we"}
+    return mapping.get(w, w)

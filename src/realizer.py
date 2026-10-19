@@ -9,12 +9,13 @@ def realize(meaning):
     if m_type == "IS_A":
         subj, obj = meaning[1], meaning[2]
         is_plural = (len(meaning) > 3 and meaning[3] == "plural") or subj.endswith("s")
+        be_verb = "are" if is_plural else conjugate_verb("be", "present", subj)
         
         if is_plural:
-            return f"{subj.capitalize()} are {obj}."
+            return f"{subj.capitalize()} {be_verb} {obj}."
         else:
             article = get_article(obj)
-            return f"{subj.capitalize()} is {article} {obj}."
+            return f"{subj.capitalize()} {be_verb} {article} {obj}."
         
     elif m_type == "NOT_IS_A":
         subj, obj = meaning[1], meaning[2]
@@ -28,7 +29,8 @@ def realize(meaning):
 
     elif m_type == "IS_PROP":
         subj, adj = meaning[1], meaning[2]
-        return f"{subj.capitalize()} is {adj}."
+        be_verb = conjugate_verb("be", "present", subj)
+        return f"{subj.capitalize()} {be_verb} {adj}."
         
     elif m_type == "SVO":
         subj, verb, obj = meaning[1], meaning[2], meaning[3]

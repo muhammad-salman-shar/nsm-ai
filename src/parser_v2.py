@@ -1,6 +1,7 @@
 import re
 from src.constructions import CONSTRUCTIONS
 from src.patterns import get_base_verb
+from src.morphology import normalize_pronoun
 
 def detect_tense(verb):
     v = verb.lower()
@@ -27,11 +28,11 @@ def parse_to_meaning(text):
         idx_is = words.index("is")
         idx_det = words.index(det)
         if idx_is == 1 and idx_det == 2 and len(words) == 4:
-            return ("IS_A", words[0], words[3])
+            return ("IS_A", normalize_pronoun(words[0]), words[3])
             
     # Plural handling: dogs are animals
     if "are" in words and len(words) == 3:
-        return ("IS_A", words[0], words[2], "plural")
+        return ("IS_A", normalize_pronoun(words[0]), words[2], "plural")
             
     # Negation: [SUBJ] is not a [OBJ]
     if "is" in words and "not" in words and ("a" in words or "an" in words):
@@ -41,16 +42,16 @@ def parse_to_meaning(text):
             
     # Question: Is [SUBJ] a [OBJ]?
     if words[0] == "is" and ("a" in words or "an" in words) and len(words) >= 4:
-        return ("Q_IS_A", words[1], words[-1])
+        return ("Q_IS_A", normalize_pronoun(words[1]), words[-1])
 
     # 2. IS_PROP: [SUBJ] is [ADJ]
     if "is" in words and len(words) == 3 and "a" not in words:
-        return ("IS_PROP", words[0], words[2])
+        return ("IS_PROP", normalize_pronoun(words[0]), words[2])
         
     # 3. SVO: [SUBJ] [VERB] [OBJ]
     if len(words) == 3:
         tense = detect_tense(words[1])
-        return ("SVO", words[0], words[1], words[2], tense)
+        return ("SVO", normalize_pronoun(words[0]), words[1], words[2], tense)
         
     # Future tense: [SUBJ] will [VERB] [OBJ] (4 words)
     if len(words) == 4 and words[1] in ("will", "shall"):
