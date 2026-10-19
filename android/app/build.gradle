@@ -20,7 +20,7 @@ android {
         }
 
         python {
-            buildPython "python"
+            buildPython "python3"
             pip {
                 install "numpy"
             }
