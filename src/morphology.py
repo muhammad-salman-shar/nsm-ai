@@ -106,3 +106,26 @@ def normalize_pronoun(word):
     w = word.lower().strip()
     mapping = {"me": "i", "my": "i", "mine": "i", "him": "he", "his": "he", "her": "she", "hers": "she", "them": "they", "their": "they", "us": "we", "our": "we"}
     return mapping.get(w, w)
+
+
+import re as _re
+
+PRONOUN_SWAP_PATTERNS = [
+    (r"\bI'm\b", "you are"),
+    (r"\bI am\b", "you are"),
+    (r"\bI\b", "you"),
+    (r"\bmy\b", "your"),
+    (r"\bme\b", "you"),
+    (r"\bmine\b", "yours"),
+    (r"\bmyself\b", "yourself"),
+    (r"\bam\b", "are"),
+]
+
+def swap_pronouns(text):
+    """Swaps first-person pronouns to second-person (NSM recalling user's memory)."""
+    if not text:
+        return text
+    result = text
+    for pattern, replacement in PRONOUN_SWAP_PATTERNS:
+        result = _re.sub(pattern, replacement, result, flags=_re.IGNORECASE)
+    return result

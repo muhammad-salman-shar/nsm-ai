@@ -15,7 +15,7 @@ from src.parser_v2 import parse_to_meaning
 from src.realizer import realize, get_article
 from src.llm_teacher import improve_language
 from src.patterns import is_svo_verb
-from src.morphology import conjugate_verb
+from src.morphology import conjugate_verb, swap_pronouns
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
@@ -72,7 +72,7 @@ _COMMON_VERBS = {
 }
 
 _QUESTION_STARTERS = {
-    "what","whats","who","where","when","why","how","which","whose",
+    "what","whats","who","whos","where","wheres","when","whens","why","whys","how","hows","which","whose",
     "tell","explain","define",
     "do","does","did","can","could","will","would","should",
     "is","are","was","were","have","has","had","may","might","must",
@@ -377,9 +377,10 @@ class Brain:
                     past_clean = past_clean[0].upper() + past_clean[1:]
                 
                 # If user is asking a question, confirm it. If statement, just recall.
+                past_swapped = swap_pronouns(past_clean)
                 if _is_question_text(text):
-                    return f"Yes, you told me earlier: \"{past_clean}\""
-                return f"I remember you said: \"{past_clean}\"."
+                    return f"Yes, you told me earlier: \"{past_swapped}\""
+                return f"I remember you said: \"{past_swapped}\"."
         return self.lang.generate(intent, self.personality, self.affect)
 
     def _reset_chain(self):
@@ -388,7 +389,7 @@ class Brain:
 
     def _try_learn_relation(self, text):
         # Do not learn from questions! Only statements.
-        if _is_question_text(text) or text.strip().endswith("?") or text.lower().startswith(("what ", "whats ", "who ")):
+        if _is_question_text(text) or text.strip().endswith("?") or text.lower().startswith(("what ", "whats ", "who ", "whos ", "where ", "wheres ", "when ", "whens ", "why ", "whys ", "how ", "hows ")):
             return None
             
         words = _words(text)
