@@ -94,9 +94,10 @@ class Handler(BaseHTTPRequestHandler):
             user_id = data.get("user_id", "default")
             llm_url = data.get("llm_url")
             llm_model = data.get("llm_model")
+            llm_key = data.get("llm_key")
             
             brain = get_brain(user_id)
-            result = brain.observe_bulk(text, llm_url=llm_url, llm_model=llm_model)
+            result = brain.observe_bulk(text, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
             database.save_brain(user_id, persistence.to_dict(brain))
             response_text = result["response"]
             
@@ -152,9 +153,10 @@ class Handler(BaseHTTPRequestHandler):
             user_id = data.get("user_id", "default")
             llm_url = data.get("llm_url")
             llm_model = data.get("llm_model")
+            llm_key = data.get("llm_key")
             
             brain = get_brain(user_id)
-            result = brain.observe_bulk(text, llm_url=llm_url, llm_model=llm_model)
+            result = brain.observe_bulk(text, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
             database.save_brain(user_id, persistence.to_dict(brain))
             _json_response(self, 200, result)
         elif parsed.path == "/reset":

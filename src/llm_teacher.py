@@ -14,10 +14,10 @@ RULES:
 3. If raw thought says "I don't know", just say it in a friendly way.
 Output ONLY the rewritten sentence, nothing else."""
 
-def improve_language(raw_text, user_input="", llm_url=None, llm_model=None):
+def improve_language(raw_text, user_input="", llm_url=None, llm_model=None, llm_key=None):
     url = llm_url or os.environ.get("NSM_LLM_URL", DEFAULT_URL)
     model = llm_model or os.environ.get("NSM_LLM_MODEL", DEFAULT_MODEL)
-    api_key = os.environ.get("NSM_LLM_KEY", "")
+    api_key = llm_key or os.environ.get("NSM_LLM_KEY", "")
 
     if url == DEFAULT_URL and not api_key:
         return raw_text
