@@ -10,85 +10,71 @@
     --text: #e6edf3; --text-dim: #8b949e; --accent: #ff6b35;
     --user-bg: #1f6feb; --nsm-bg: #21262d;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+  body { background: var(--bg); color: var(--text); display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
   
-  /* Fix for mobile viewport height */
-  body { 
-    background: var(--bg); 
-    color: var(--text); 
-    display: flex; 
-    height: 100vh; 
-    height: 100dvh; 
-    overflow: hidden; 
-  }
-  
-  /* Sidebar Overlay */
-  #sidebar-overlay {
-    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.6); z-index: 99; backdrop-filter: blur(2px);
-  }
+  /* Overlay for Sidebar */
+  #sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 99; backdrop-filter: blur(2px); }
   #sidebar-overlay.open { display: block; }
 
   /* Sidebar */
-  #sidebar { 
-    width: 260px; background: var(--surface); display: flex; flex-direction: column; 
-    transition: transform 0.3s ease; border-right: 1px solid #30363d; 
-    position: absolute; height: 100%; z-index: 100; transform: translateX(-100%); 
-  }
+  #sidebar { width: 280px; background: var(--surface); display: flex; flex-direction: column; transition: transform 0.3s; border-right: 1px solid #30363d; position: absolute; height: 100%; z-index: 100; transform: translateX(-100%); }
   #sidebar.open { transform: translateX(0); }
-  
-  #sidebar-header { padding: 16px; border-bottom: 1px solid #30363d; position: relative; }
-  .close-btn { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; }
-  .close-btn:hover { color: white; }
-  
-  .btn { background: var(--surface2); color: var(--text); border: 1px solid #30363d; padding: 10px 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; transition: 0.2s; }
+  #sidebar-header { padding: 16px; border-bottom: 1px solid #30363d; }
+  .btn { background: var(--surface2); color: var(--text); border: 1px solid #30363d; padding: 10px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; transition: 0.2s; margin-bottom: 8px; }
   .btn:hover { background: #30363d; }
   .btn-primary { background: var(--accent); color: white; border: none; }
-  .btn-primary:hover { background: #ff8555; }
-  
+  #search-box { width: 100%; padding: 10px; background: var(--bg); border: 1px solid #30363d; color: white; border-radius: 8px; margin-top: 8px; outline: none; }
   #chat-list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .chat-item { padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: 0.2s; }
+  .chat-item { padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chat-item:hover, .chat-item.active { background: var(--surface2); color: var(--text); }
   
   /* Main Chat */
   #main { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
   header { padding: 12px 20px; background: var(--surface); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #30363d; flex-shrink: 0; }
   .menu-btn { background: none; border: none; color: var(--text); font-size: 24px; cursor: pointer; padding: 0 10px; }
-  #mood-indicator { font-size: 12px; background: var(--surface2); padding: 4px 10px; border-radius: 12px; color: var(--text-dim); }
   
-  #chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
-  .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 15px; line-height: 1.5; word-wrap: break-word; animation: fadeIn 0.3s ease; }
+  #chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 15px; line-height: 1.5; word-wrap: break-word; animation: fadeIn 0.2s; }
   .user-msg { background: var(--user-bg); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
   .nsm-msg { background: var(--nsm-bg); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #30363d; }
-  .meta { font-size: 11px; color: var(--text-dim); margin-top: 6px; display: block; }
   
-  /* Input Area */
-  #input-area { padding: 16px; background: var(--surface); border-top: 1px solid #30363d; display: flex; gap: 12px; flex-shrink: 0; }
-  #message-input { flex: 1; background: var(--bg); border: 1px solid #30363d; color: var(--text); padding: 14px 18px; border-radius: 24px; font-size: 15px; outline: none; transition: 0.2s; }
-  #message-input:focus { border-color: var(--accent); }
-  #send-btn { background: var(--accent); color: white; border: none; padding: 0 24px; border-radius: 24px; cursor: pointer; font-weight: bold; }
+  /* Input */
+  #input-area { padding: 12px; background: var(--surface); border-top: 1px solid #30363d; display: flex; gap: 8px; flex-shrink: 0; }
+  #message-input { flex: 1; background: var(--bg); border: 1px solid #30363d; color: var(--text); padding: 14px; border-radius: 24px; outline: none; }
+  #send-btn { background: var(--accent); color: white; border: none; padding: 0 20px; border-radius: 24px; font-weight: bold; cursor: pointer; }
+  #voice-btn { background: var(--surface2); color: white; border: 1px solid #30363d; padding: 0 16px; border-radius: 24px; font-size: 18px; cursor: pointer; }
+
+  /* Modal Base */
+  .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 200; align-items: center; justify-content: center; }
+  .modal-content { background: var(--surface); padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #30363d; max-height: 80vh; overflow-y: auto; }
+  .modal-content input { width: 100%; background: var(--bg); border: 1px solid #30363d; color: white; padding: 12px; border-radius: 8px; margin-top: 8px; margin-bottom: 16px; }
+  .modal-content label { font-size: 12px; color: var(--text-dim); }
   
-  /* Settings Modal */
-  #settings-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; }
-  .modal-content { background: var(--surface); padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #30363d; }
-  .modal-content input { width: 100%; background: var(--bg); border: 1px solid #30363d; color: white; padding: 10px; border-radius: 8px; margin-top: 8px; margin-bottom: 16px; }
-  
+  /* PIN Screen */
+  #pin-screen { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; }
+  #pin-screen h2 { color: var(--accent); margin-bottom: 20px; }
+  #pin-input { width: 200px; text-align: center; font-size: 24px; letter-spacing: 5px; background: var(--surface); border: 2px solid var(--accent); color: white; padding: 10px; border-radius: 8px; outline: none; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  .typing-indicator { display: flex; gap: 4px; padding: 4px 8px; }
-  .dot { width: 6px; height: 6px; background: var(--text-dim); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
-  .dot:nth-child(1) { animation-delay: -0.32s; } .dot:nth-child(2) { animation-delay: -0.16s; }
-  @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 </style>
 </head>
 <body>
+
+<!-- PIN LOCK SCREEN -->
+<div id="pin-screen">
+  <h2>🔒 NSM is Locked</h2>
+  <input type="password" id="pin-input" maxlength="4" placeholder="****" oninput="checkPin()">
+  <p id="pin-error" style="color:red; margin-top:10px; display:none;">Wrong PIN</p>
+</div>
 
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <div id="sidebar">
   <div id="sidebar-header">
     <button class="btn btn-primary" onclick="startNewChat()">+ New Chat</button>
-    <button class="btn" style="margin-top:8px;" onclick="openSettings()">⚙️ Settings</button>
-    <button class="close-btn" onclick="toggleSidebar()">✕</button>
+    <button class="btn" onclick="openDashboard()">🧠 What I Know</button>
+    <button class="btn" onclick="openSettings()">⚙️ Settings</button>
+    <input type="text" id="search-box" placeholder="Search chats..." oninput="filterChats()">
   </div>
   <div id="chat-list"></div>
 </div>
@@ -97,9 +83,8 @@
   <header>
     <div style="display:flex; align-items:center;">
       <button class="menu-btn" onclick="toggleSidebar()">☰</button>
-      <strong style="margin-left:10px;">NSM VB <span style="color:var(--accent); font-size:12px;">by NeuraSaMu</span></strong>
+      <strong style="margin-left:10px;">NSM VB</strong>
     </div>
-    <div id="mood-indicator">mood: ready</div>
   </header>
   
   <div id="chat-container">
@@ -107,104 +92,108 @@
   </div>
 
   <div id="input-area">
+    <button id="voice-btn" onclick="startVoice()">🎤</button>
     <input type="text" id="message-input" placeholder="Message NSM..." onkeypress="handleEnter(event)" autocomplete="off">
     <button id="send-btn" onclick="sendMessage()">Send</button>
   </div>
 </div>
 
-<div id="settings-modal">
+<!-- SETTINGS MODAL -->
+<div id="settings-modal" class="modal">
   <div class="modal-content">
-    <h2 style="margin-bottom:16px;">Settings</h2>
-    <label style="font-size:12px; color:var(--text-dim);">User Name (for memory privacy)</label>
+    <h2>Settings</h2>
+    <label>User Name (for private memory)</label>
     <input type="text" id="settings-user" placeholder="e.g. salman">
     
-    <label style="font-size:12px; color:var(--text-dim);">Local LLM URL (Optional)</label>
+    <label>Local LLM URL (Optional)</label>
     <input type="text" id="settings-url" placeholder="http://127.0.0.1:8080/v1/chat/completions">
     
-    <label style="font-size:12px; color:var(--text-dim);">Model Name</label>
-    <input type="text" id="settings-model" placeholder="e.g. samu, llama3">
+    <label>Model Name</label>
+    <input type="text" id="settings-model" placeholder="e.g. samu">
     
-    <label style="font-size:12px; color:var(--text-dim);">API Key (Only if using paid cloud API)</label>
-    <input type="password" id="settings-key" placeholder="gsk_... (leave empty for local)">
+    <label>API Key (Only for cloud models)</label>
+    <input type="password" id="settings-key" placeholder="gsk_...">
     
-    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    <hr style="border-color:#30363d; margin: 16px 0;">
     
-    <hr style="border-color: #30363d; margin: 20px 0;">
-    <button class="btn" onclick="exportBrain()" style="background: #1f6feb; color: white;">⬇️ Export Brain (File)</button>
-    <button class="btn" onclick="document.getElementById('import-file').click()" style="margin-top: 8px;">⬆️ Import Brain (File)</button>
-    <input type="file" id="import-file" style="display:none" accept=".json" onchange="importBrain(event)">
+    <label>App Security (PIN Lock)</label>
+    <select id="settings-pin-enabled" style="width:100%; padding:10px; background:var(--bg); color:white; border:1px solid #30363d; border-radius:8px; margin-top:8px;">
+      <option value="off">Disabled</option>
+      <option value="on">Enabled</option>
+    </select>
+    <input type="password" id="settings-pin" maxlength="4" placeholder="Set 4-digit PIN">
     
-    <button class="btn" style="margin-top:20px; background:transparent;" onclick="closeSettings()">Cancel</button>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="saveSettings()">Save Settings</button>
+    <button class="btn" onclick="closeModal('settings-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- DASHBOARD MODAL -->
+<div id="dashboard-modal" class="modal">
+  <div class="modal-content">
+    <h2>🧠 What I Know About You</h2>
+    <div id="dashboard-content" style="margin-top:16px; font-size:14px; color:var(--text-dim);">
+      Loading...
+    </div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="closeModal('dashboard-modal')">Close</button>
   </div>
 </div>
 
 <script>
   let currentChatId = Date.now().toString();
   let chats = JSON.parse(localStorage.getItem('nsm_chats') || '{}');
-  let settings = JSON.parse(localStorage.getItem('nsm_settings') || '{"user": "default"}');
+  let settings = JSON.parse(localStorage.getItem('nsm_settings') || '{"user": "default", "pinEnabled": "off"}');
 
-  document.getElementById('settings-user').value = settings.user;
-  document.getElementById('settings-url').value = settings.url || "";
-  document.getElementById('settings-model').value = settings.model || "";
-  document.getElementById('settings-key').value = settings.key || "";
+  // --- INITIALIZATION ---
+  function init() {
+    document.getElementById('settings-user').value = settings.user || "default";
+    document.getElementById('settings-url').value = settings.url || "";
+    document.getElementById('settings-model').value = settings.model || "";
+    document.getElementById('settings-key').value = settings.key || "";
+    document.getElementById('settings-pin-enabled').value = settings.pinEnabled || "off";
+    document.getElementById('settings-pin').value = settings.pin || "";
+    
+    if (settings.pinEnabled === 'on' && settings.pin) {
+      document.getElementById('pin-screen').style.display = 'flex';
+    }
+    loadChatList();
+    startNewChat();
+  }
 
-  function toggleSidebar() { 
+  // --- SECURITY ---
+  function checkPin() {
+    const val = document.getElementById('pin-input').value;
+    if (val === settings.pin) {
+      document.getElementById('pin-screen').style.display = 'none';
+      document.getElementById('pin-error').style.display = 'none';
+      document.getElementById('pin-input').value = "";
+    } else if (val.length === 4) {
+      document.getElementById('pin-error').style.display = 'block';
+      document.getElementById('pin-input').value = "";
+    }
+  }
+
+  // --- SIDEBAR & CHAT HISTORY ---
+  function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('sidebar-overlay').classList.toggle('open');
   }
-  
-  function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; toggleSidebar(); }
-  function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
-  
-  async function exportBrain() {
-    try {
-      const res = await fetch('/export', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ user_id: settings.user })
-      });
-      const data = await res.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `NSM_Brain_${settings.user}.json`;
-      a.click(); URL.revokeObjectURL(url);
-    } catch(e) { alert("Export failed!"); }
+
+  function filterChats() {
+    const query = document.getElementById('search-box').value.toLowerCase();
+    loadChatList(query);
   }
 
-  async function importBrain(event) {
-    const file = event.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const brainData = JSON.parse(e.target.result);
-        await fetch('/import', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ user_id: settings.user, brain_data: brainData })
-        });
-        alert("Brain imported successfully! Refreshing...");
-        window.location.reload();
-      } catch(e) { alert("Import failed! Invalid file."); }
-    };
-    reader.readAsText(file);
-  }
-
-  function saveSettings() {
-    settings.user = document.getElementById('settings-user').value || "default";
-    settings.url = document.getElementById('settings-url').value;
-    settings.model = document.getElementById('settings-model').value;
-    settings.key = document.getElementById('settings-key').value;
-    localStorage.setItem('nsm_settings', JSON.stringify(settings));
-    closeSettings();
-  }
-
-  function loadChatList() {
+  function loadChatList(searchQuery = "") {
     const list = document.getElementById('chat-list');
     list.innerHTML = '';
     Object.keys(chats).sort().reverse().forEach(id => {
+      const title = chats[id].title || "New Chat";
+      if (searchQuery && !title.toLowerCase().includes(searchQuery)) return;
+      
       const div = document.createElement('div');
       div.className = 'chat-item' + (id === currentChatId ? ' active' : '');
-      div.innerText = chats[id].title || "New Chat";
+      div.innerText = title;
       div.onclick = () => loadChat(id);
       list.appendChild(div);
     });
@@ -215,10 +204,10 @@
     const container = document.getElementById('chat-container');
     container.innerHTML = '';
     if(chats[id] && chats[id].messages) {
-      chats[id].messages.forEach(m => addMessage(m.text, m.sender, m.meta, false));
+      chats[id].messages.forEach(m => addMessage(m.text, m.sender, false));
     }
     toggleSidebar();
-    loadChatList();
+    loadChatList(document.getElementById('search-box').value);
   }
 
   function startNewChat() {
@@ -226,26 +215,83 @@
     chats[currentChatId] = { title: "New Chat", messages: [] };
     document.getElementById('chat-container').innerHTML = '<div class="msg nsm-msg">Hi! I\'m NSM VB. Talk to me, or teach me new words.</div>';
     toggleSidebar();
-    loadChatList();
+    loadChatList(document.getElementById('search-box').value);
   }
 
-  function addMessage(text, sender, meta, save = true) {
+  function addMessage(text, sender, save = true) {
     const container = document.getElementById('chat-container');
     const div = document.createElement('div');
     div.className = `msg ${sender === 'user' ? 'user-msg' : 'nsm-msg'}`;
-    div.innerHTML = text + (meta ? `<span class="meta">${meta}</span>` : '');
+    div.innerText = text;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 
     if(save) {
       if(!chats[currentChatId]) chats[currentChatId] = { title: text.substring(0, 20), messages: [] };
       if(chats[currentChatId].messages.length === 0) chats[currentChatId].title = text.substring(0, 20);
-      chats[currentChatId].messages.push({text, sender, meta});
+      chats[currentChatId].messages.push({text, sender});
       localStorage.setItem('nsm_chats', JSON.stringify(chats));
-      loadChatList();
+      loadChatList(document.getElementById('search-box').value);
     }
   }
 
+  // --- MODALS ---
+  function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; toggleSidebar(); }
+  function openDashboard() { 
+    document.getElementById('dashboard-modal').style.display = 'flex'; 
+    toggleSidebar();
+    fetchDashboard();
+  }
+  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+  
+  function saveSettings() {
+    settings.user = document.getElementById('settings-user').value || "default";
+    settings.url = document.getElementById('settings-url').value;
+    settings.model = document.getElementById('settings-model').value;
+    settings.key = document.getElementById('settings-key').value;
+    settings.pinEnabled = document.getElementById('settings-pin-enabled').value;
+    settings.pin = document.getElementById('settings-pin').value;
+    localStorage.setItem('nsm_settings', JSON.stringify(settings));
+    closeModal('settings-modal');
+    alert("Settings Saved!");
+  }
+
+  async function fetchDashboard() {
+    const content = document.getElementById('dashboard-content');
+    try {
+      const res = await fetch('/export', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: settings.user })
+      });
+      const data = await res.json();
+      let html = '<h3>Facts</h3><ul>';
+      for(let k in data.facts) html += `<li><b>${k}:</b> ${data.facts[k]}</li>`;
+      html += '</ul><h3>Relations</h3><ul>';
+      for(let k in data.relations) html += `<li>${k.replace('|', ' ')}</li>`; // Simplified relation display
+      html += '</ul>';
+      content.innerHTML = html;
+    } catch(e) {
+      content.innerHTML = "Failed to load memory.";
+    }
+  }
+
+  // --- VOICE INPUT ---
+  function startVoice() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert("Voice input not supported on this device."); return;
+    }
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'en-US';
+    recognition.onstart = () => document.getElementById('voice-btn').innerText = "🔴";
+    recognition.onend = () => document.getElementById('voice-btn').innerText = "🎤";
+    recognition.onresult = (event) => {
+      document.getElementById('message-input').value = event.results[0][0].transcript;
+      sendMessage();
+    };
+    recognition.start();
+  }
+
+  // --- CHAT LOGIC ---
   function handleEnter(e) { if(e.key === 'Enter') sendMessage(); }
 
   async function sendMessage() {
@@ -256,33 +302,19 @@
     addMessage(text, 'user');
     input.value = '';
     
-    const container = document.getElementById('chat-container');
-    const typingDiv = document.createElement('div');
-    typingDiv.className = 'msg nsm-msg typing-indicator';
-    typingDiv.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-    container.appendChild(typingDiv);
-    container.scrollTop = container.scrollHeight;
-
     try {
       const res = await fetch('/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ text: text, user_id: settings.user, llm_url: settings.url, llm_model: settings.model, llm_key: settings.key })
       });
       const data = await res.json();
-      container.removeChild(typingDiv);
-      
-      const meta = `${data.intent} · ${data.mood}`;
-      addMessage(data.response, 'nsm', meta);
-      document.getElementById('mood-indicator').innerText = 'mood: ' + data.mood;
+      addMessage(data.response, 'nsm');
     } catch (err) {
-      container.removeChild(typingDiv);
-      addMessage("Error connecting to brain.", 'nsm', null);
+      addMessage("Error connecting to brain.", 'nsm');
     }
   }
 
-  loadChatList();
-  startNewChat();
+  init();
 </script>
 </body>
 </html>
