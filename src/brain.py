@@ -72,7 +72,7 @@ _COMMON_VERBS = {
 }
 
 _QUESTION_STARTERS = {
-    "what","who","where","when","why","how","which","whose",
+    "what","whats","who","where","when","why","how","which","whose",
     "tell","explain","define",
     "do","does","did","can","could","will","would","should",
     "is","are","was","were","have","has","had","may","might","must",
@@ -267,7 +267,7 @@ class Brain:
 
     def _lookup_definition(self, text):
         q = _words(text)
-        if not any(w in ("what","who","tell","explain","define") for w in q):
+        if not any(w in ("what","whats","who","tell","explain","define") for w in q):
             return None
         
         # Don't hijack SVO queries like "what does salman eat"
@@ -276,7 +276,8 @@ class Brain:
             
         target = q[-1]
         if target in self.definitions:
-            return f"{target} means: {self.definitions[target]}"
+            resp = f"{target} means: {self.definitions[target]}"
+            return resp.replace(" my ", " your ").replace(" me ", " you ").replace(" I ", " you ")
         if self.relations.get("IS", target):
             return f"I know {target} is related to {', '.join(self.relations.get('IS', target))}."
         return None
@@ -387,7 +388,7 @@ class Brain:
 
     def _try_learn_relation(self, text):
         # Do not learn from questions! Only statements.
-        if _is_question_text(text) or text.strip().endswith("?"):
+        if _is_question_text(text) or text.strip().endswith("?") or text.lower().startswith(("what ", "whats ", "who ")):
             return None
             
         words = _words(text)
