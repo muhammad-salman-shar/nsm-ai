@@ -584,7 +584,7 @@ class Brain:
             "response": response, "defined": label,
         }
 
-    def observe(self, text):
+    def observe(self, text, llm_url=None, llm_model=None):
         self.turn += 1
         result = self._observe_inner(text)
         
@@ -592,7 +592,7 @@ class Brain:
         if result and result.get("response"):
             raw_thought = result["response"]
             result["raw_thought"] = raw_thought
-            result["response"] = improve_language(raw_thought, text)
+            result["response"] = improve_language(raw_thought, text, llm_url, llm_model)
             
         self._maybe_save()
         return result
@@ -871,16 +871,16 @@ class Brain:
             except OSError:
                 pass
 
-    def observe_bulk(self, text):
+    def observe_bulk(self, text, llm_url=None, llm_model=None):
         from src.text_utils import split_sentences
         sentences = split_sentences(text)
         
         if len(sentences) <= 1:
-            return self.observe(text)
+            return self.observe(text, llm_url=llm_url, llm_model=llm_model)
             
         last_result = None
         for s in sentences:
-            last_result = self.observe(s)
+            last_result = self.observe(s, llm_url=llm_url, llm_model=llm_model)
             
         return {
             "turn": self.turn,

@@ -121,6 +121,9 @@
     <label style="font-size:12px; color:var(--text-dim);">Local LLM URL (Optional)</label>
     <input type="text" id="settings-url" placeholder="http://127.0.0.1:8080/v1/chat/completions">
     
+    <label style="font-size:12px; color:var(--text-dim);">Model Name</label>
+    <input type="text" id="settings-model" placeholder="e.g. samu, llama3">
+    
     <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
     
     <hr style="border-color: #30363d; margin: 20px 0;">
@@ -139,6 +142,7 @@
 
   document.getElementById('settings-user').value = settings.user;
   document.getElementById('settings-url').value = settings.url || "";
+  document.getElementById('settings-model').value = settings.model || "";
 
   function toggleSidebar() { 
     document.getElementById('sidebar').classList.toggle('open');
@@ -184,6 +188,7 @@
   function saveSettings() {
     settings.user = document.getElementById('settings-user').value || "default";
     settings.url = document.getElementById('settings-url').value;
+    settings.model = document.getElementById('settings-model').value;
     localStorage.setItem('nsm_settings', JSON.stringify(settings));
     closeSettings();
   }
@@ -257,7 +262,7 @@
       const res = await fetch('/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ text: text, user_id: settings.user })
+        body: JSON.stringify({ text: text, user_id: settings.user, llm_url: settings.url, llm_model: settings.model })
       });
       const data = await res.json();
       container.removeChild(typingDiv);
