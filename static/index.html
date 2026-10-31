@@ -123,6 +123,8 @@
     </select>
     <input type="password" id="settings-pin" maxlength="4" placeholder="Set 4-digit PIN">
     
+    <button class="btn" style="margin-top:16px; background:#1f6feb; color:white;" onclick="testLLMConnection()">🔗 Test LLM Connection</button>
+    <div id="test-llm-result" style="margin-top:8px; font-size:12px; padding:8px; border-radius:6px; display:none;"></div>
     <button class="btn btn-primary" style="margin-top:16px;" onclick="saveSettings()">Save Settings</button>
     <button class="btn" onclick="closeModal('settings-modal')">Cancel</button>
   </div>
@@ -254,6 +256,43 @@
     localStorage.setItem('nsm_settings', JSON.stringify(settings));
     closeModal('settings-modal');
     alert("Settings Saved!");
+  }
+
+  async function testLLMConnection() {
+    const resultBox = document.getElementById('test-llm-result');
+    resultBox.style.display = 'block';
+    resultBox.style.background = '#1f6feb';
+    resultBox.style.color = 'white';
+    resultBox.innerText = 'Testing connection...';
+    
+    const url = document.getElementById('settings-url').value;
+    const model = document.getElementById('settings-model').value;
+    const key = document.getElementById('settings-key').value;
+    
+    if (!url || !model) {
+      resultBox.style.background = '#8b2e2e';
+      resultBox.innerText = '❌ URL and Model Name required';
+      return;
+    }
+    
+    try {
+      const res = await fetch('/test_llm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ llm_url: url, llm_model: model, llm_key: key })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        resultBox.style.background = '#238636';
+        resultBox.innerText = '✅ Connected! Response: ' + data.response;
+      } else {
+        resultBox.style.background = '#8b2e2e';
+        resultBox.innerText = '❌ ' + data.error + (data.details ? ' | ' + data.details : '');
+      }
+    } catch(e) {
+      resultBox.style.background = '#8b2e2e';
+      resultBox.innerText = '❌ ' + e.message;
+    }
   }
 
   async function fetchDashboard() {
