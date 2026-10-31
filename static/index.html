@@ -271,15 +271,32 @@
       <button class="btn-primary" onclick="saveSettings()">Save</button>
     </div>
 
-    <!-- DATA VIEW -->
+    <!-- DATA VIEW (BRAIN MANAGER) -->
     <div id="settings-data" class="settings-view">
       <div class="settings-header">
         <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
-        <h2>Data & Memory</h2>
+        <h2>Brain Manager</h2>
       </div>
-      <div class="settings-group">
-        <button class="btn-secondary" onclick="exportMemory()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-download"/></svg> Export Memory</button>
-        <button class="btn-secondary" onclick="document.getElementById('import-file').click()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-refresh"/></svg> Import Memory</button>
+      
+      <!-- Active Brain -->
+      <div class="settings-group" style="background: var(--surface2); padding: 12px; border-radius: 10px;">
+        <label style="color: var(--accent); font-weight: bold;">Active Brain</label>
+        <div style="font-size: 16px; margin-top: 4px;" id="active-brain-name">default</div>
+      </div>
+
+      <!-- Import Status -->
+      <div id="import-status" style="display: none; margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 13px;"></div>
+
+      <!-- Saved Brains List -->
+      <label style="margin-top: 16px; display: block; font-size: 13px; color: var(--text-dim); font-weight: 500;">SAVED BRAINS</label>
+      <div id="brains-list" style="margin-top: 8px; max-height: 200px; overflow-y: auto;">
+        <div style="color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px;">Loading...</div>
+      </div>
+
+      <!-- Actions -->
+      <div class="settings-group" style="margin-top: 16px;">
+        <button class="btn-secondary" onclick="exportMemory()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-download"/></svg> Export Current Brain</button>
+        <button class="btn-secondary" onclick="document.getElementById('import-file').click()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-refresh"/></svg> Import Brain File</button>
         <input type="file" id="import-file" style="display:none" accept=".json" multiple onchange="importMemory(event)">
       </div>
       <button class="btn-primary" onclick="showSettingsView('main')">Back</button>
@@ -346,6 +363,7 @@
   function showSettingsView(view) {
     document.querySelectorAll('.settings-view').forEach(v => v.classList.remove('active'));
     document.getElementById('settings-' + view).classList.add('active');
+    if (view === 'data') loadBrainsList();
   }
   
   function saveSettings() {
