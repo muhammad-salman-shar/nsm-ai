@@ -283,6 +283,15 @@
         <label style="color: var(--accent); font-weight: bold;">Active Brain</label>
         <div style="font-size: 16px; margin-top: 4px;" id="active-brain-name">default</div>
       </div>
+      
+      <!-- Create New Brain -->
+      <div class="settings-group" style="margin-top: 10px;">
+        <label>Create New Brain</label>
+        <div style="display: flex; gap: 8px;">
+            <input type="text" id="new-brain-name" placeholder="e.g. salman" style="margin-bottom:0; flex:1;">
+            <button class="btn-secondary" onclick="createNewBrain()" style="margin-top:0; width:auto; padding: 0 16px;">Create</button>
+        </div>
+      </div>
 
       <!-- Import Status -->
       <div id="import-status" style="display: none; position: relative; margin-top: 10px; padding: 10px 30px 10px 10px; border-radius: 8px; font-size: 13px;">
@@ -650,7 +659,7 @@
           '<span style="font-size: 14px; font-weight: ' + (isActive ? 'bold' : 'normal') + '; color: ' + (isActive ? 'var(--accent)' : 'var(--text)') + ';">' + brain + (isActive ? ' (active)' : '') + '</span>' +
           '<div style="display: flex; gap: 6px;">' +
           (!isActive ? '<button onclick="switchBrain(\'' + brain + '\')" style="background: var(--accent); color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Load</button>' : '') +
-          (!isActive ? '<button onclick="deleteBrain(\'' + brain + '\')" style="background: #8b2e2e; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Delete</button>' : '') +
+          '<button onclick="deleteBrain(\'' + brain + '\')" style="background: #8b2e2e; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Delete</button>' +
           '</div></div>';
       }).join('');
     } catch(e) {
@@ -668,13 +677,20 @@
   }
 
   async function deleteBrain(brainId) {
-    if (!confirm('Delete brain "' + brainId + '"? This cannot be undone.')) return;
+    if (!confirm('Delete brain "' + brainId + '"? This will delete all its memory forever.')) return;
     try {
       await fetch('/delete_brain', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ user_id: brainId })
       });
       showToast('Deleted: ' + brainId);
+      
+      // If we deleted the active brain, switch to default
+      if (brainId === settings.user) {
+        settings.user = 'default';
+        localStorage.setItem('nsm_settings', JSON.stringify(settings));
+        document.getElementById('settings-user').value = 'default';
+      }
       loadBrainsList();
     } catch(e) {
       showToast('Failed to delete: ' + e.message);
@@ -727,7 +743,7 @@
       if (successCount > 0) {
         statusBox.style.background = '#238636';
         statusBox.style.color = 'white';
-        textSpan.innerHTML = '✅ Imported ' + successCount + ' file(s)!' + (failCount > 0 ? '<br>❌ Failed: ' + failCount : '') + (errors.length > 0 ? '<br><small>' + errors.join('<br>') + '</small>' : '');
+        textSpan.innerHTML = '✅ Success! Brain memory updated. You can close this.';
         setTimeout(() => loadBrainsList(), 500);
       } else {
         statusBox.style.background = '#8b2e2e';
@@ -738,6 +754,28 @@
     event.target.value = '';
   }
 
+
+  async function createNewBrain() {
+    const name = document.getElementById('new-brain-name').value.trim();
+    if (!name) { showToast("Enter a brain name"); return; }
+    
+    // Switch to this new brain
+    settings.user = name;
+    localStorage.setItem('nsm_settings', JSON.stringify(settings));
+    document.getElementById('settings-user').value = name;
+    document.getElementById('active-brain-name').innerText = name;
+    
+    // Create an empty brain in DB
+    try {
+      await fetch('/import', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: name, brain_data: { version: 1, definitions: {}, relations: {}, lexicon: {}, episodes: [], facts: {}, affect: {drives:{},hormones:{}} }, mode: 'replace' })
+      });
+      showToast("Created & Switched to: " + name);
+      document.getElementById('new-brain-name').value = '';
+      loadBrainsList();
+    } catch(e) { showToast("Error creating brain"); }
+  }
 
   async function exportMemory() {
     showToast("Exporting brain...");
