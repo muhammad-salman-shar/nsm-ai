@@ -738,6 +738,79 @@
     event.target.value = '';
   }
 
+
+  async function exportMemory() {
+    showToast("Exporting brain...");
+    try {
+      const res = await fetch('/export', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: settings.user })
+      });
+      if (!res.ok) throw new Error("Server error " + res.status);
+      
+      const data = await res.json();
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], {type: "application/json"});
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url; 
+      a.download = `NSM_Memory_${settings.user}.json`;
+      document.body.appendChild(a);
+      a.click(); 
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Exported successfully!");
+    } catch(e) { 
+      alert("Export failed: " + e.message); 
+    }
+  }
+
+  async function loadSampleBrain() {
+    showToast("Generating Salman Brain...");
+    const sampleBrain = {
+      "version": 1, "turn": 5, "max_depth": 5,
+      "definitions": {
+        "ai": "Artificial Intelligence - machines that simulate human intelligence",
+        "scientist": "a person who studies or practices science",
+        "researcher": "a person who conducts research and investigations",
+        "human": "a man, woman, or child of the species Homo sapiens",
+        "code": "instructions written for a computer to execute"
+      },
+      "facts": { "name": "Salman", "profession": "AI Scientist and Researcher", "age": 25 },
+      "relations": {
+        "IS|salman": {
+          "human": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"},
+          "researcher": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"},
+          "scientist": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"}
+        },
+        "CAN|salman": {
+          "code": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"}
+        }
+      },
+      "lexicon": { "salman": {"count": 1, "contexts": []}, "ai": {"count": 1, "contexts": []} },
+      "episodes": [],
+      "affect": {"drives": {}, "hormones": {}}
+    };
+    
+    try {
+      const res = await fetch('/import', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: 'salman', brain_data: sampleBrain, mode: 'replace' })
+      });
+      const result = await res.json();
+      if (result.ok) {
+        showToast("Salman Brain Loaded! Switching...");
+        settings.user = 'salman';
+        localStorage.setItem('nsm_settings', JSON.stringify(settings));
+        loadBrainsList();
+        document.getElementById('active-brain-name').innerText = 'salman';
+      } else {
+        alert("Failed: " + result.error);
+      }
+    } catch(e) { alert("Error: " + e.message); }
+  }
+
   init();
 </script>
 </body>
