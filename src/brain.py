@@ -655,10 +655,11 @@ class Brain:
 
     def _try_feedback(self, text):
         """Detects user corrections and marks previous response as rejected."""
-        t_low = text.lower().strip()
-        
-        # Guard: no previous episode to reject
-        if not self.episodic.episodes:
+        try:
+            t_low = text.lower().strip()
+            if not self.episodic.episodes:
+                return None
+        except Exception:
             return None
         
         # Find last valid episode (skip if already feedback prompt)

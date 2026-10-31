@@ -402,43 +402,79 @@
   function copyText(t) { navigator.clipboard.writeText(t).then(() => alert("Copied!")); }
   function shareText(t) { if(navigator.share) navigator.share({text: t}); }
   
+  let activeTTSBtn = null;
+
   function speakText(text, btn) {
-    if ('speechSynthesis' in window) {
-      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-        window.speechSynthesis.pause();
-        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-play"/></svg>';
-      } else if (window.speechSynthesis.paused) {
+    if (!('speechSynthesis' in window)) { alert("TTS not supported"); return; }
+
+    // If a different button is active, stop it
+    if (activeTTSBtn && activeTTSBtn !== btn) {
+      window.speechSynthesis.cancel();
+      activeTTSBtn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
+      activeTTSBtn = null;
+    }
+
+    // Toggle play/pause for this button
+    if (activeTTSBtn === btn) {
+      if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
         btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
-      } else {
-        window.speechSynthesis.cancel();
-        const utt = new SpeechSynthesisUtterance(text);
-        utt.onend = () => { btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>'; };
-        window.speechSynthesis.speak(utt);
-        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
+      } else if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-play"/></svg>';
       }
+      return;
     }
+
+    // Start new speech
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = 1.0;
+    utt.pitch = 1.0;
+    utt.onend = () => {
+      btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
+      if (activeTTSBtn === btn) activeTTSBtn = null;
+    };
+    utt.onerror = () => {
+      btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
+      if (activeTTSBtn === btn) activeTTSBtn = null;
+    };
+    window.speechSynthesis.speak(utt);
+    btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
+    activeTTSBtn = btn;
   }
 
   function editMessage(index, btn) {
     const chat = chats[currentChatId];
     const wrapper = btn.closest('.msg-wrapper');
     const bubble = wrapper.querySelector('.msg');
-    bubble.innerHTML = `<input type="text" class="edit-input" value="${chat.messages[index].text}">`;
+    const origText = chat.messages[index].text;
+    bubble.innerHTML = `<input type="text" class="edit-input" value="${origText}">
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button onclick="submitEdit(${index})" style="background: rgba(255,255,255,0.25); border: none; color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Send</button>
+        <button onclick="renderChat('${currentChatId}')" style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Cancel</button>
+      </div>`;
     const input = bubble.querySelector('input');
     input.focus();
     input.onkeypress = (e) => {
-      if (e.key === 'Enter') {
-        const newText = input.value.trim();
-        if (newText) {
-          chat.messages[index].text = newText;
-          chat.messages = chat.messages.slice(0, index + 1);
-          localStorage.setItem('nsm_chats', JSON.stringify(chats));
-          renderChat(currentChatId);
-          sendToBrain(newText);
-        }
-      }
+      if (e.key === 'Enter') submitEdit(index);
     };
+  }
+
+  function submitEdit(index) {
+    const chat = chats[currentChatId];
+    const allUserBubbles = document.querySelectorAll('.msg-wrapper.user');
+    const wrapper = allUserBubbles[allUserBubbles.length - 1];
+    if (!wrapper) return;
+    const input = wrapper.querySelector('.edit-input');
+    if (!input) return;
+    const newText = input.value.trim();
+    if (!newText) return;
+    chat.messages[index].text = newText;
+    chat.messages = chat.messages.slice(0, index + 1);
+    localStorage.setItem('nsm_chats', JSON.stringify(chats));
+    renderChat(currentChatId);
+    sendToBrain(newText);
   }
 
   function retryResponse(index) {
@@ -527,6 +563,11 @@
         body: JSON.stringify({ text: text, user_id: settings.user, llm_url: settings.url, llm_model: settings.model, llm_key: settings.key }),
         signal: currentController.signal
       });
+      if (!res.ok) {
+        let errBody = "";
+        try { errBody = await res.text(); } catch(e) {}
+        throw new Error("Server " + res.status + ": " + errBody.substring(0, 150));
+      }
       const data = await res.json();
       if (container.contains(typing)) container.removeChild(typing);
       const chat = chats[currentChatId];
@@ -535,11 +576,13 @@
       renderChat(currentChatId);
     } catch (err) {
       if (container.contains(typing)) container.removeChild(typing);
+      let errorMsg = "Error connecting to brain.";
       if (err.name === 'AbortError') {
-        appendBubble('nsm', "Generation stopped by user.", chats[currentChatId].messages.length);
-      } else {
-        appendBubble('nsm', "Error connecting to brain.", chats[currentChatId].messages.length);
+        errorMsg = "Generation stopped by user.";
+      } else if (err.message) {
+        errorMsg = "Error: " + err.message;
       }
+      appendBubble('nsm', errorMsg, chats[currentChatId].messages.length);
     } finally {
       isGenerating = false;
       sendBtn.innerHTML = '<svg class="svg-icon-lg"><use href="#i-send"/></svg>';
