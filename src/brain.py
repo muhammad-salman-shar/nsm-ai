@@ -249,6 +249,21 @@ class Brain:
         unknown.sort(key=lambda w: -len(w))
         return unknown
 
+
+    def _auto_vocab(self, text):
+        """Silently adds unknown non-stopword words to lexicon. Returns genuinely new words."""
+        new_words = []
+        for w in _words(text):
+            if w in STOPWORDS or len(w) < 3:
+                continue
+            if self.lexicon.has(w):
+                continue
+            if w.endswith("s") and (self.lexicon.has(w[:-1]) or self.lexicon.has(w[:-2])):
+                continue
+            self.lexicon.see(w)
+            new_words.append(w)
+        return new_words
+
     def _attend(self, words):
         known = sum(1 for w in words if self.lexicon.has(w))
         ratio = known / max(len(words), 1)
@@ -481,6 +496,8 @@ class Brain:
                 "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
                 "response": response,
             }
+        new_words = self._auto_vocab(text)
+
         words, intent, conf = self._perceive(text)
         self._attend(words)
         lookup = self._lookup_definition(text)
@@ -825,7 +842,7 @@ class Brain:
         recall = self.episodic.recall(text, top_k=1)
 
         if parse_query(text) is None:
-            unknown = self._find_unknown(words)
+            unknown = new_words
         else:
             unknown = []
         if unknown and self.ask_depth < self.max_depth:
