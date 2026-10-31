@@ -173,6 +173,7 @@ class Brain:
         self.definitions = {}
         self.ask_depth = 0
         self.asked_words = set()
+        self.pending_feedback = None
         self.auto_save_path = auto_save_path
         if auto_save_path:
             persistence.load(self, auto_save_path)
@@ -652,6 +653,44 @@ class Brain:
         import random
         return random.choice(self.ASK_BANK)
 
+    def _try_feedback(self, text):
+        """Detects user corrections and marks previous response as rejected."""
+        t_low = text.lower().strip()
+        
+        # Guard: no previous episode to reject
+        if not self.episodic.episodes:
+            return None
+        
+        # Find last valid episode (skip if already feedback prompt)
+        last_ep = self.episodic.episodes[-1]
+        if last_ep.get("feedback") == "rejected":
+            return None
+        
+        # Guard: if NSM's last response was a question, user's "no" is answer, not correction
+        last_response = last_ep.get("response", "")
+        if last_response.rstrip().endswith("?"):
+            return None
+        
+        # Case 1: Pure correction signal (whole message)
+        if t_low.strip(".,!?") in ("wrong", "incorrect", "nope", "thats wrong", "that's wrong"):
+            last_ep["feedback"] = "rejected"
+            self.pending_feedback = last_ep["text"]
+            return f"Sorry! What should I have said for '{last_ep['text']}'?"
+        
+        # Case 2: Inline correction "no, [answer]" / "actually [answer]" / "wrong, [answer]"
+        for marker in ("no,", "wrong,", "incorrect,", "actually,", "actually ", "no ", "wrong "):
+            if t_low.startswith(marker):
+                correct = text[len(marker):].strip()
+                if not correct:
+                    continue
+                last_ep["feedback"] = "rejected"
+                self.pending_feedback = None
+                self.episodic.store(last_ep["text"], self.affect.mood(), correct, 1.0, feedback="accepted")
+                self.affect.event("rewarded", intensity=0.8)
+                return f"Got it! I'll remember: '{correct}' for '{last_ep['text']}'"
+        
+        return None
+
     def _try_remember(self, text):
         m = re.match(r"^remember(?:\s+this|\s+that)?[:,]?\s+(.*)", text, re.IGNORECASE)
         if not m:
@@ -710,6 +749,22 @@ class Brain:
         return f"Got it. I forgot everything about '{target}'."
 
     def _observe_inner(self, text):
+        # L14: Pending Feedback Resolution (User is teaching correction)
+        if self.pending_feedback:
+            original_question = self.pending_feedback
+            correct_answer = text.strip()
+            self.pending_feedback = None
+            self.episodic.store(original_question, self.affect.mood(), correct_answer, 1.0, feedback="accepted")
+            self.affect.event("rewarded", intensity=1.0)
+            self.affect.tick()
+            return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it! For '{original_question}' I will say: '{correct_answer}'"}
+
+        # L14: Feedback Detection (Correction signals)
+        feedback_resp = self._try_feedback(text)
+        if feedback_resp:
+            self.affect.tick()
+            return {"turn": self.turn, "text": text, "intent": "correction", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": feedback_resp}
+
         # L9: Remember System (Highest Priority)
         remember_resp = self._try_remember(text)
         if remember_resp:
