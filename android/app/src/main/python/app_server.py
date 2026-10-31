@@ -17,4 +17,12 @@ def start_server(data_dir=None):
     try:
         run(host="127.0.0.1", port=8081)
     except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
         print(f"Server crashed: {e}")
+        if data_dir:
+            try:
+                with open(os.path.join(data_dir, "crash.log"), "w") as f:
+                    f.write(err_msg)
+            except Exception:
+                pass

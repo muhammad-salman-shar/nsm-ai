@@ -174,7 +174,8 @@ def handler_404(handler):
 
 
 def run(host="0.0.0.0", port=8081):
-    os.makedirs(STATIC_DIR, exist_ok=True)
+    # Note: In Android APK, the static folder is read-only.
+    # We don't need to create it, it's bundled with the app.
     server = HTTPServer((host, port), Handler)
     print(f"NSM VB server on http://{host}:{port}")
     print(f"Open in browser: http://localhost:{port}")
