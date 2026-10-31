@@ -81,6 +81,19 @@
   .send-btn.stop { background: #8b2e2e; }
 
   /* SETTINGS MODAL & SUB-MENUS */
+  .toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85); color: #fff; padding: 10px 20px;
+    border-radius: 20px; font-size: 14px; z-index: 10000;
+    animation: fadeInOut 2s forwards; pointer-events: none;
+  }
+  @keyframes fadeInOut {
+    0% { opacity: 0; bottom: 60px; }
+    10% { opacity: 1; bottom: 80px; }
+    90% { opacity: 1; bottom: 80px; }
+    100% { opacity: 0; bottom: 100px; }
+  }
+
   .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
   .modal-content { background: var(--surface); padding: 20px; border-radius: 16px; width: 90%; max-width: 400px; border: 1px solid var(--border); max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; position: relative; }
   
@@ -283,6 +296,14 @@
   let currentController = null;
   let isGenerating = false;
 
+  function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2000);
+  }
+
   function init() {
     applyTheme(settings.theme || 'system');
     document.getElementById('settings-theme').value = settings.theme || 'system';
@@ -335,7 +356,7 @@
     settings.pinEnabled = document.getElementById('settings-pin-enabled').value;
     settings.pin = document.getElementById('settings-pin').value;
     localStorage.setItem('nsm_settings', JSON.stringify(settings));
-    alert("Settings Saved!");
+    showToast("Settings Saved!");
   }
 
   function loadChatList(query = "") {
@@ -402,20 +423,13 @@
   function copyText(t) { navigator.clipboard.writeText(t).then(() => alert("Copied!")); }
   function shareText(t) { if(navigator.share) navigator.share({text: t}); }
   
-  let activeTTSBtn = null;
+  let currentSpeechText = null;
 
   function speakText(text, btn) {
-    if (!('speechSynthesis' in window)) { alert("TTS not supported"); return; }
+    if (!('speechSynthesis' in window)) { showToast("TTS not supported"); return; }
 
-    // If a different button is active, stop it
-    if (activeTTSBtn && activeTTSBtn !== btn) {
-      window.speechSynthesis.cancel();
-      activeTTSBtn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
-      activeTTSBtn = null;
-    }
-
-    // Toggle play/pause for this button
-    if (activeTTSBtn === btn) {
+    // If clicking the same text that is currently speaking/paused
+    if (currentSpeechText === text) {
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
         btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
@@ -428,20 +442,19 @@
 
     // Start new speech
     window.speechSynthesis.cancel();
+    currentSpeechText = text;
+    
     const utt = new SpeechSynthesisUtterance(text);
     utt.rate = 1.0;
-    utt.pitch = 1.0;
     utt.onend = () => {
-      btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
-      if (activeTTSBtn === btn) activeTTSBtn = null;
+      if (currentSpeechText === text) {
+        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
+        currentSpeechText = null;
+      }
     };
-    utt.onerror = () => {
-      btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
-      if (activeTTSBtn === btn) activeTTSBtn = null;
-    };
+    
     window.speechSynthesis.speak(utt);
     btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
-    activeTTSBtn = btn;
   }
 
   function editMessage(index, btn) {
@@ -451,8 +464,8 @@
     const origText = chat.messages[index].text;
     bubble.innerHTML = `<input type="text" class="edit-input" value="${origText}">
       <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <button onclick="submitEdit(${index})" style="background: rgba(255,255,255,0.25); border: none; color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Send</button>
-        <button onclick="renderChat('${currentChatId}')" style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Cancel</button>
+        <button onclick="submitEdit(${index})" style="background: var(--accent); border: none; color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Send</button>
+        <button onclick="renderChat('${currentChatId}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Cancel</button>
       </div>`;
     const input = bubble.querySelector('input');
     input.focus();

@@ -68,7 +68,7 @@ public class MainActivity extends AppCompatActivity {
         }).start();
 
         // Retry loading the page after 3 seconds
-        webView.postDelayed(() -> webView.loadUrl("http://127.0.0.1:8081"), 3000);
+        webView.postDelayed(() -> webView.loadUrl("http://127.0.0.1:8081"), 5000);
     }
 
     @Override
