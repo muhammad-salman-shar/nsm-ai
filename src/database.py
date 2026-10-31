@@ -2,9 +2,9 @@ import sqlite3
 import json
 import os
 
-# Fix for Android: Chaquopy sets ANDROID_PRIVATE to the app's writable directory
-if os.environ.get("ANDROID_PRIVATE"):
-    DATA_DIR = os.path.join(os.environ["ANDROID_PRIVATE"], "data")
+# Fix for Android: MainActivity passes the writable path via NSM_DATA_DIR
+if os.environ.get("NSM_DATA_DIR"):
+    DATA_DIR = os.environ["NSM_DATA_DIR"]
 else:
     DATA_DIR = "data"
 

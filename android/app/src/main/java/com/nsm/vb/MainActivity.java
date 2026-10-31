@@ -59,8 +59,10 @@ public class MainActivity extends AppCompatActivity {
                 if (!Python.isStarted()) {
                     Python.start(new AndroidPlatform(this));
                 }
+                // Get the app's writable internal storage directory
+                String dataDir = getFilesDir().getAbsolutePath();
                 PyObject pyServer = Python.getInstance().getModule("app_server");
-                pyServer.callAttr("start_server");
+                pyServer.callAttr("start_server", dataDir);
             } catch (Exception e) {
                 final String err = e.toString();
                 runOnUiThread(() -> webView.evaluateJavascript("document.getElementById('err').innerText = '" + err + "';", null));

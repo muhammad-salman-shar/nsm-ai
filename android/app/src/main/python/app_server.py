@@ -11,7 +11,9 @@ if not os.path.exists("data"):
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.server import run
 
-def start_server():
+def start_server(data_dir=None):
+    if data_dir:
+        os.environ["NSM_DATA_DIR"] = data_dir
     try:
         run(host="127.0.0.1", port=8081)
     except Exception as e:
