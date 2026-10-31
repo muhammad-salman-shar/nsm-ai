@@ -897,6 +897,9 @@ class Brain:
         self._attend(words)
         recall = self.episodic.recall(text, top_k=1)
 
+        # L13: Auto-vocabulary (silently learn new words first)
+        new_words = self._auto_vocab(text)
+        
         if parse_query(text) is None:
             unknown = new_words
         else:
