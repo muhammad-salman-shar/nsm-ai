@@ -622,6 +622,117 @@
     }
   }
   function stopGeneration() { if (currentController) currentController.abort(); }
+
+  // ===== BRAIN MANAGER FUNCTIONS (added later) =====
+  async function loadBrainsList() {
+    const list = document.getElementById('brains-list');
+    const activeName = document.getElementById('active-brain-name');
+    if (!list) return;
+    if (activeName) activeName.innerText = settings.user || 'default';
+    
+    try {
+      const res = await fetch('/brains');
+      const data = await res.json();
+      const brains = data.brains || [];
+      
+      if (brains.length === 0) {
+        list.innerHTML = '<div style="color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px;">No brains saved yet</div>';
+        return;
+      }
+      
+      list.innerHTML = brains.map(brain => {
+        const isActive = brain === settings.user;
+        return '<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ' + (isActive ? 'var(--surface2)' : 'transparent') + '; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;">' +
+          '<span style="font-size: 14px; font-weight: ' + (isActive ? 'bold' : 'normal') + '; color: ' + (isActive ? 'var(--accent)' : 'var(--text)') + ';">' + brain + (isActive ? ' (active)' : '') + '</span>' +
+          '<div style="display: flex; gap: 6px;">' +
+          (!isActive ? '<button onclick="switchBrain(\'' + brain + '\')" style="background: var(--accent); color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Load</button>' : '') +
+          (!isActive ? '<button onclick="deleteBrain(\'' + brain + '\')" style="background: #8b2e2e; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Delete</button>' : '') +
+          '</div></div>';
+      }).join('');
+    } catch(e) {
+      list.innerHTML = '<div style="color: #8b2e2e; font-size: 13px; text-align: center; padding: 20px;">Failed to load brains: ' + e.message + '</div>';
+    }
+  }
+
+  async function switchBrain(brainId) {
+    settings.user = brainId;
+    localStorage.setItem('nsm_settings', JSON.stringify(settings));
+    const userInput = document.getElementById('settings-user');
+    if (userInput) userInput.value = brainId;
+    showToast('Switched to brain: ' + brainId);
+    loadBrainsList();
+  }
+
+  async function deleteBrain(brainId) {
+    if (!confirm('Delete brain "' + brainId + '"? This cannot be undone.')) return;
+    try {
+      await fetch('/delete_brain', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: brainId })
+      });
+      showToast('Deleted: ' + brainId);
+      loadBrainsList();
+    } catch(e) {
+      showToast('Failed to delete: ' + e.message);
+    }
+  }
+
+  async function importMemory(event) {
+    const files = event.target.files;
+    if(!files || files.length === 0) return;
+    
+    const statusBox = document.getElementById('import-status');
+    if (statusBox) {
+      statusBox.style.display = 'block';
+      statusBox.style.background = 'var(--surface2)';
+      statusBox.style.color = 'var(--text)';
+      statusBox.innerText = 'Importing ' + files.length + ' file(s)...';
+    }
+
+    let successCount = 0, failCount = 0, errors = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileData = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.readAsText(file);
+      });
+      
+      try {
+        const brainData = JSON.parse(fileData);
+        const res = await fetch('/import', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ user_id: settings.user, brain_data: brainData, mode: 'merge' })
+        });
+        const result = await res.json();
+        if (result.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          errors.push(file.name + ': ' + (result.error || 'Unknown'));
+        }
+      } catch(e) {
+        failCount++;
+        errors.push(file.name + ': ' + e.message);
+      }
+    }
+
+    if (statusBox) {
+      if (successCount > 0) {
+        statusBox.style.background = '#238636';
+        statusBox.style.color = 'white';
+        statusBox.innerHTML = '✅ Imported ' + successCount + ' file(s)!' + (failCount > 0 ? '<br>❌ Failed: ' + failCount : '') + (errors.length > 0 ? '<br><small>' + errors.join('<br>') + '</small>' : '');
+        setTimeout(() => loadBrainsList(), 500);
+      } else {
+        statusBox.style.background = '#8b2e2e';
+        statusBox.style.color = 'white';
+        statusBox.innerHTML = '❌ All failed: ' + errors.join('<br>');
+      }
+    }
+    event.target.value = '';
+  }
+
   init();
 </script>
 </body>
