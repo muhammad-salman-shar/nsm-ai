@@ -142,3 +142,70 @@ def reset(path=DEFAULT_PATH):
         os.remove(path)
         return True
     return False
+
+
+def validate_brain_file(data):
+    """Strictly validates if data is a valid NSM brain file."""
+    if not isinstance(data, dict):
+        return False, "File must be a JSON object"
+    
+    required = ["version", "definitions", "relations", "lexicon", "episodes"]
+    for key in required:
+        if key not in data:
+            return False, f"Missing required key: '{key}'"
+    
+    if data.get("version") != STATE_VERSION:
+        return False, f"Version mismatch. Expected {STATE_VERSION}, got {data.get('version')}"
+    
+    if not isinstance(data["definitions"], dict):
+        return False, "'definitions' must be a dict"
+    if not isinstance(data["relations"], dict):
+        return False, "'relations' must be a dict"
+    if not isinstance(data["lexicon"], dict):
+        return False, "'lexicon' must be a dict"
+    if not isinstance(data["episodes"], list):
+        return False, "'episodes' must be a list"
+    
+    return True, "Valid NSM brain file"
+
+
+def merge_brain_data(existing, new_data):
+    """Merges new brain data into existing. No data is lost (except conflicts)."""
+    if existing is None:
+        return new_data
+    
+    merged = dict(existing)
+    
+    # Facts: new wins on conflict (latest is usually correct)
+    merged["facts"] = dict(existing.get("facts", {}))
+    merged["facts"].update(new_data.get("facts", {}))
+    
+    # Definitions: new wins on conflict
+    merged["definitions"] = dict(existing.get("definitions", {}))
+    merged["definitions"].update(new_data.get("definitions", {}))
+    
+    # Relations: union (both preserved)
+    merged["relations"] = {}
+    for key in set(list(existing.get("relations", {}).keys()) + list(new_data.get("relations", {}).keys())):
+        old_vals = existing.get("relations", {}).get(key, {})
+        new_vals = new_data.get("relations", {}).get(key, {})
+        combined = dict(old_vals) if isinstance(old_vals, dict) else {}
+        if isinstance(new_vals, dict):
+            combined.update(new_vals)
+        merged["relations"][key] = combined
+    
+    # Lexicon: union
+    merged["lexicon"] = dict(existing.get("lexicon", {}))
+    merged["lexicon"].update(new_data.get("lexicon", {}))
+    
+    # Episodes: append (chronological history)
+    merged["episodes"] = list(existing.get("episodes", [])) + list(new_data.get("episodes", []))
+    
+    # Turn count: max
+    merged["turn"] = max(existing.get("turn", 0), new_data.get("turn", 0))
+    
+    # Affect: keep existing (personal state)
+    if "affect" in existing:
+        merged["affect"] = existing["affect"]
+    
+    return merged
