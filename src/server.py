@@ -167,6 +167,32 @@ class Handler(BaseHTTPRequestHandler):
             }
             _json_response(self, 200, openai_resp)
 
+        elif parsed.path == "/export":
+            user_id = data.get("user_id", "default")
+            brain = get_brain(user_id)
+            _json_response(self, 200, persistence.to_dict(brain))
+            return
+
+        elif parsed.path == "/import":
+            user_id = data.get("user_id", "default")
+            import_data = data.get("brain_data")
+            mode = data.get("mode", "merge")
+            if not import_data:
+                _json_response(self, 400, {"error": "No data provided"})
+                return
+            valid, reason = persistence.validate_brain_file(import_data)
+            if not valid:
+                _json_response(self, 400, {"error": f"Invalid NSM file: {reason}"})
+                return
+            current_state = database.load_brain(user_id)
+            final_state = persistence.merge_brain_data(current_state, import_data) if mode == "merge" and current_state else import_data
+            brain = Brain(auto_save_path=None)
+            persistence.from_dict(brain, final_state)
+            database.save_brain(user_id, persistence.to_dict(brain))
+            if user_id in _brain_cache: del _brain_cache[user_id]
+            _json_response(self, 200, {"ok": True})
+            return
+
         elif parsed.path == "/chat":
             text = (data.get("text") or "").strip()
             if not text:

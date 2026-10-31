@@ -762,7 +762,7 @@
       URL.revokeObjectURL(url);
       showToast("Exported successfully!");
     } catch(e) { 
-      alert("Export failed: " + e.message); 
+      showToast("Export failed: " + e.message); 
     }
   }
 
@@ -806,9 +806,9 @@
         loadBrainsList();
         document.getElementById('active-brain-name').innerText = 'salman';
       } else {
-        alert("Failed: " + result.error);
+        showToast("Failed: " + result.error);
       }
-    } catch(e) { alert("Error: " + e.message); }
+    } catch(e) { showToast("Error: " + e.message); }
   }
 
   init();
