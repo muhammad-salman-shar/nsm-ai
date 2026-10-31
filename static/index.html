@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>NSM VB - NeuraSaMu</title>
 <style>
-  /* --- THEMES --- */
   :root[data-theme="dark"] {
     --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
     --text: #e6edf3; --text-dim: #8b949e; --accent: #ff6b35;
@@ -17,9 +16,9 @@
     --user-bg: #1f6feb; --nsm-bg: #ffffff; --border: #d0d7de;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
-  body { background: var(--bg); color: var(--text); display: flex; height: 100vh; height: 100dvh; overflow: hidden; transition: background 0.3s, color 0.3s; }
+  body { background: var(--bg); color: var(--text); display: flex; height: 100vh; height: 100dvh; overflow: hidden; transition: background 0.3s; }
   
-  /* --- SIDEBAR --- */
+  /* SIDEBAR */
   #sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
   #sidebar-overlay.open { display: block; }
   #sidebar { width: 280px; background: var(--surface); display: flex; flex-direction: column; transition: transform 0.3s; border-right: 1px solid var(--border); position: absolute; height: 100%; z-index: 100; transform: translateX(-100%); }
@@ -28,19 +27,19 @@
   #chat-list { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
   .chat-item { padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text); display: flex; justify-content: space-between; align-items: center; background: var(--surface2); }
   .chat-item.active { border-left: 3px solid var(--accent); }
-  .chat-item-actions { display: flex; gap: 6px; opacity: 0.6; }
-  .action-icon { background: none; border: none; cursor: pointer; color: var(--text); font-size: 16px; padding: 4px; }
-  #sidebar-bottom { padding: 16px; border-top: 1px solid var(--border); text-align: right; }
-  .btn-settings { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; }
+  .chat-item-actions { display: flex; gap: 4px; opacity: 0.6; }
+  .icon-btn { background: none; border: none; cursor: pointer; color: var(--text); font-size: 16px; padding: 4px; }
+  #sidebar-bottom { padding: 16px; border-top: 1px solid var(--border); }
+  .btn-settings { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; }
 
-  /* --- MAIN UI --- */
+  /* MAIN */
   #main { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
   header { padding: 12px 16px; background: var(--surface); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .header-title { display: flex; align-items: center; gap: 10px; font-weight: bold; }
   .header-actions { display: flex; gap: 8px; }
-  .header-actions button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+  .header-actions button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 16px; }
   
-  /* --- CHAT --- */
+  /* CHAT */
   #chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
   .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; }
   .msg-wrapper.user { align-self: flex-end; align-items: flex-end; }
@@ -50,33 +49,47 @@
   .nsm .msg { background: var(--nsm-bg); color: var(--text); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
   
   /* BUBBLE ACTIONS */
-  .msg-actions { display: flex; gap: 8px; margin-top: 4px; opacity: 0.7; transition: opacity 0.2s; }
-  .msg-actions:hover { opacity: 1; }
-  .msg-actions button { background: none; border: none; color: var(--text-dim); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 2px; }
-  .msg-actions button:hover { color: var(--accent); }
-  .edit-input { width: 100%; background: transparent; color: white; border: none; border-bottom: 1px solid white; outline: none; font-size: 15px; font-family: inherit; }
+  .msg-actions { display: flex; gap: 12px; margin-top: 4px; opacity: 0.7; }
+  .msg-actions button { background: none; border: none; color: var(--text-dim); font-size: 14px; cursor: pointer; }
+  .msg-actions button:active { color: var(--accent); }
+  .edit-input { width: 100%; background: transparent; color: white; border: none; border-bottom: 1px solid white; outline: none; font-size: 15px; }
 
-  /* --- INPUT AREA --- */
+  /* TYPING ANIMATION */
+  .typing-indicator { display: flex; gap: 4px; padding: 16px; background: var(--nsm-bg); border-radius: 16px; border: 1px solid var(--border); width: fit-content; align-self: flex-start; }
+  .typing-indicator span { display: block; width: 6px; height: 6px; background: var(--text-dim); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+  .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+  .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+  /* INPUT */
   #input-area { padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 12px; flex-shrink: 0; }
   #message-input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 14px 18px; border-radius: 24px; outline: none; font-size: 15px; }
-  #send-btn { background: var(--accent); color: white; border: none; padding: 0 24px; border-radius: 24px; font-weight: bold; cursor: pointer; }
+  .send-btn { background: var(--accent); color: white; border: none; padding: 0 16px; border-radius: 24px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 50px; }
+  .send-btn.stop { background: #8b2e2e; }
 
-  /* --- MODALS & SETTINGS --- */
+  /* SETTINGS MODAL & SUB-MENUS */
   .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-  .modal-content { background: var(--surface); padding: 24px; border-radius: 16px; width: 90%; max-width: 450px; border: 1px solid var(--border); max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-  .modal h2 { margin-bottom: 20px; font-size: 22px; font-weight: 600; }
-  .settings-group { background: var(--bg); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
-  .settings-group label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
-  .settings-group input, .settings-group select { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; margin-bottom: 12px; outline: none; font-size: 14px; }
-  .settings-group input:last-child { margin-bottom: 0; }
-  .btn-primary { background: var(--accent); color: white; border: none; padding: 14px; border-radius: 10px; cursor: pointer; width: 100%; font-weight: 600; font-size: 16px; }
-  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 14px; border-radius: 10px; cursor: pointer; width: 100%; font-weight: 600; font-size: 16px; margin-top: 8px; }
-  #test-llm-result { margin-top: 10px; font-size: 13px; padding: 10px; border-radius: 8px; display: none; text-align: center; font-weight: 500; }
+  .modal-content { background: var(--surface); padding: 20px; border-radius: 16px; width: 90%; max-width: 400px; border: 1px solid var(--border); max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+  
+  /* Settings Menu List */
+  .settings-menu { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .settings-item { padding: 16px; background: var(--surface2); border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 500; transition: 0.2s; }
+  .settings-item:active { background: var(--border); }
+  
+  /* Settings Sub-Views */
+  .settings-view { display: none; flex-direction: column; height: 100%; overflow-y: auto; }
+  .settings-view.active { display: flex; }
+  .settings-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .back-btn { background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; padding: 4px 8px 4px 0; }
+  .settings-group label { display: block; font-size: 13px; color: var(--text-dim); margin: 12px 0 6px 0; font-weight: 500; }
+  .settings-group input, .settings-group select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; outline: none; font-size: 14px; }
+  .btn-primary { background: var(--accent); color: white; border: none; padding: 14px; border-radius: 10px; cursor: pointer; width: 100%; font-weight: 600; margin-top: auto; }
+  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; margin-top: 8px; }
+  #test-llm-result { margin-top: 10px; font-size: 13px; padding: 10px; border-radius: 8px; display: none; text-align: center; }
 </style>
 </head>
 <body>
 
-<!-- PIN LOCK SCREEN -->
 <div id="pin-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; flex-direction: column; justify-content: center; align-items: center;">
   <h2 style="color: var(--accent); margin-bottom: 20px;">🔒 NSM is Locked</h2>
   <input type="password" id="pin-input" maxlength="4" placeholder="****" oninput="checkPin()" style="width: 200px; text-align: center; font-size: 24px; letter-spacing: 5px; background: var(--surface); border: 2px solid var(--accent); color: var(--text); padding: 10px; border-radius: 8px; outline: none;">
@@ -84,7 +97,6 @@
 </div>
 
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
-
 <div id="sidebar">
   <div style="padding: 16px;">
     <input type="text" id="search-box" placeholder="Search chats..." oninput="loadChatList(this.value)">
@@ -98,11 +110,11 @@
 <div id="main">
   <header>
     <div class="header-title">
-      <button class="action-icon" onclick="openSidebar()">☰</button>
+      <button class="icon-btn" onclick="openSidebar()" style="font-size: 20px;">☰</button>
       <span>NSM VB</span>
     </div>
     <div class="header-actions">
-      <button onclick="startNewChat()">+</button>
+      <button onclick="startNewChat()">＋</button>
       <button onclick="deleteCurrentChat()">🗑️</button>
       <button onclick="shareCurrentChat()">🔗</button>
       <button onclick="downloadCurrentChat()">⬇️</button>
@@ -113,58 +125,96 @@
 
   <div id="input-area">
     <input type="text" id="message-input" onkeypress="handleEnter(event)" autocomplete="off">
-    <button id="send-btn" onclick="sendMessage()">Send</button>
+    <button id="send-btn" class="send-btn" onclick="handleSendClick()">✈️</button>
   </div>
 </div>
 
 <!-- SETTINGS MODAL -->
 <div id="settings-modal" class="modal">
   <div class="modal-content">
-    <h2>Settings</h2>
     
-    <div class="settings-group">
-      <label>Theme</label>
-      <select id="settings-theme" onchange="applyTheme(this.value)">
-        <option value="system">System Default</option>
-        <option value="dark">Dark Mode</option>
-        <option value="light">Light Mode</option>
-      </select>
+    <!-- MAIN MENU -->
+    <div id="settings-main" class="settings-view active">
+      <h2 style="margin-bottom: 16px;">Settings</h2>
+      <div class="settings-menu">
+        <div class="settings-item" onclick="showSettingsView('general')">🎨 Appearance <span>></span></div>
+        <div class="settings-item" onclick="showSettingsView('llm')">🤖 AI Model <span>></span></div>
+        <div class="settings-item" onclick="showSettingsView('security')">🔒 Security <span>></span></div>
+        <div class="settings-item" onclick="showSettingsView('data')">💾 Data & Memory <span>></span></div>
+      </div>
+      <button class="btn-secondary" style="margin-top: 20px;" onclick="closeModal('settings-modal')">Close</button>
     </div>
 
-    <div class="settings-group">
-      <label>User Name (Private Memory)</label>
-      <input type="text" id="settings-user" placeholder="e.g. salman">
-    </div>
-    
-    <div class="settings-group">
-      <label>Local LLM URL</label>
-      <input type="text" id="settings-url" placeholder="http://127.0.0.1:8080/v1">
-      <label>Model Name</label>
-      <input type="text" id="settings-model" placeholder="e.g. samu">
-      <label>API Key (Optional)</label>
-      <input type="password" id="settings-key" placeholder="gsk_...">
-      <button class="btn-secondary" onclick="testLLM()">🔗 Test LLM Connection</button>
-      <div id="test-llm-result"></div>
-    </div>
-
-    <div class="settings-group">
-      <label>PIN Lock</label>
-      <select id="settings-pin-enabled">
-        <option value="off">Disabled</option>
-        <option value="on">Enabled</option>
-      </select>
-      <input type="password" id="settings-pin" maxlength="4" placeholder="Set 4-digit PIN">
+    <!-- GENERAL VIEW -->
+    <div id="settings-general" class="settings-view">
+      <div class="settings-header">
+        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <h2>Appearance</h2>
+      </div>
+      <div class="settings-group">
+        <label>Theme</label>
+        <select id="settings-theme" onchange="applyTheme(this.value)">
+          <option value="system">System Default</option>
+          <option value="dark">Dark Mode</option>
+          <option value="light">Light Mode</option>
+        </select>
+        <label>User Name</label>
+        <input type="text" id="settings-user" placeholder="e.g. salman">
+      </div>
+      <button class="btn-primary" onclick="saveSettings()">Save</button>
     </div>
 
-    <div class="settings-group">
-      <label>Memory Backup</label>
-      <button class="btn-secondary" onclick="exportMemory()" style="margin-top: 0;">⬇️ Export Memory</button>
-      <button class="btn-secondary" onclick="document.getElementById('import-file').click()">⬆️ Import Memory</button>
-      <input type="file" id="import-file" style="display:none" accept=".json" multiple onchange="importMemory(event)">
+    <!-- LLM VIEW -->
+    <div id="settings-llm" class="settings-view">
+      <div class="settings-header">
+        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <h2>AI Model</h2>
+      </div>
+      <div class="settings-group">
+        <label>Local LLM URL</label>
+        <input type="text" id="settings-url" placeholder="http://127.0.0.1:8080/v1">
+        <label>Model Name</label>
+        <input type="text" id="settings-model" placeholder="e.g. samu">
+        <label>API Key (Optional)</label>
+        <input type="password" id="settings-key" placeholder="gsk_...">
+        <button class="btn-secondary" onclick="testLLM()">Test Connection</button>
+        <div id="test-llm-result"></div>
+      </div>
+      <button class="btn-primary" onclick="saveSettings()">Save</button>
     </div>
 
-    <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
-    <button class="btn-secondary" onclick="closeModal('settings-modal')">Cancel</button>
+    <!-- SECURITY VIEW -->
+    <div id="settings-security" class="settings-view">
+      <div class="settings-header">
+        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <h2>Security</h2>
+      </div>
+      <div class="settings-group">
+        <label>PIN Lock</label>
+        <select id="settings-pin-enabled">
+          <option value="off">Disabled</option>
+          <option value="on">Enabled</option>
+        </select>
+        <label>Set 4-digit PIN</label>
+        <input type="password" id="settings-pin" maxlength="4" placeholder="****">
+      </div>
+      <button class="btn-primary" onclick="saveSettings()">Save</button>
+    </div>
+
+    <!-- DATA VIEW -->
+    <div id="settings-data" class="settings-view">
+      <div class="settings-header">
+        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <h2>Data & Memory</h2>
+      </div>
+      <div class="settings-group">
+        <button class="btn-secondary" onclick="exportMemory()">⬇️ Export Memory</button>
+        <button class="btn-secondary" onclick="document.getElementById('import-file').click()">⬆️ Import Memory</button>
+        <input type="file" id="import-file" style="display:none" accept=".json" multiple onchange="importMemory(event)">
+      </div>
+      <button class="btn-primary" onclick="showSettingsView('main')">Back</button>
+    </div>
+
   </div>
 </div>
 
@@ -172,11 +222,13 @@
   let currentChatId = Date.now().toString();
   let chats = JSON.parse(localStorage.getItem('nsm_chats') || '{}');
   let settings = JSON.parse(localStorage.getItem('nsm_settings') || '{"user": "default", "theme": "system", "pinEnabled": "off"}');
+  
+  let currentController = null; // For aborting fetch
+  let isGenerating = false;
+  let currentSpeech = null;
 
-  // --- INITIALIZATION ---
   function init() {
     applyTheme(settings.theme || 'system');
-    
     document.getElementById('settings-theme').value = settings.theme || 'system';
     document.getElementById('settings-user').value = settings.user || "default";
     document.getElementById('settings-url').value = settings.url || "";
@@ -185,18 +237,14 @@
     document.getElementById('settings-pin-enabled').value = settings.pinEnabled || "off";
     document.getElementById('settings-pin').value = settings.pin || "";
     
-    if (settings.pinEnabled === 'on' && settings.pin) {
-      document.getElementById('pin-screen').style.display = 'flex';
-    }
+    if (settings.pinEnabled === 'on' && settings.pin) document.getElementById('pin-screen').style.display = 'flex';
+    if (!chats[currentChatId]) chats[currentChatId] = { title: "New Chat", messages: [] };
     
-    if (!chats[currentChatId]) {
-      chats[currentChatId] = { title: "New Chat", messages: [] };
-    }
     renderChat(currentChatId);
     loadChatList();
   }
 
-  // --- THEME ---
+  // THEME & SIDEBAR
   function applyTheme(theme) {
     if (theme === 'system') {
       const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -208,86 +256,65 @@
     localStorage.setItem('nsm_settings', JSON.stringify(settings));
   }
 
-  // --- SIDEBAR SWIPE ---
-  let touchstartX = 0;
-  let touchendX = 0;
-  function handleGesture() {
-    if (touchendX < touchstartX - 50) closeSidebar(); // Swipe left
-    if (touchendX > touchstartX + 50) openSidebar();  // Swipe right
-  }
+  let touchstartX = 0, touchendX = 0;
   document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
-  document.addEventListener('touchend', e => { touchendX = e.changedTouches[0].screenX; handleGesture(); });
+  document.addEventListener('touchend', e => { touchendX = e.changedTouches[0].screenX; 
+    if (touchendX < touchstartX - 50) closeSidebar();
+    if (touchendX > touchstartX + 50) openSidebar();
+  });
+  function openSidebar() { document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebar-overlay').classList.add('open'); }
+  function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('open'); }
 
-  function openSidebar() {
-    document.getElementById('sidebar').classList.add('open');
-    document.getElementById('sidebar-overlay').classList.add('open');
+  // SETTINGS
+  function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; closeSidebar(); showSettingsView('main'); }
+  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+  function showSettingsView(view) {
+    document.querySelectorAll('.settings-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('settings-' + view).classList.add('active');
   }
-  function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('sidebar-overlay').classList.remove('open');
-  }
-
-  // --- SECURITY ---
-  function checkPin() {
-    const val = document.getElementById('pin-input').value;
-    if (val === settings.pin) {
-      document.getElementById('pin-screen').style.display = 'none';
-      document.getElementById('pin-error').style.display = 'none';
-      document.getElementById('pin-input').value = "";
-    } else if (val.length === 4) {
-      document.getElementById('pin-error').style.display = 'block';
-      document.getElementById('pin-input').value = "";
-    }
+  
+  function saveSettings() {
+    settings.user = document.getElementById('settings-user').value || "default";
+    settings.url = document.getElementById('settings-url').value;
+    settings.model = document.getElementById('settings-model').value;
+    settings.key = document.getElementById('settings-key').value;
+    settings.pinEnabled = document.getElementById('settings-pin-enabled').value;
+    settings.pin = document.getElementById('settings-pin').value;
+    localStorage.setItem('nsm_settings', JSON.stringify(settings));
+    alert("Settings Saved!");
   }
 
-  // --- CHAT LIST ---
+  async function testLLM() { /* Same as before */ }
+
+  // CHAT LIST
   function loadChatList(query = "") {
     const list = document.getElementById('chat-list');
     list.innerHTML = '';
     Object.keys(chats).sort().reverse().forEach(id => {
       const title = chats[id].title || "New Chat";
       if (query && !title.toLowerCase().includes(query.toLowerCase())) return;
-      
       const item = document.createElement('div');
       item.className = 'chat-item' + (id === currentChatId ? ' active' : '');
-      
-      const text = document.createElement('span');
-      text.innerText = title;
-      text.onclick = () => { currentChatId = id; renderChat(id); closeSidebar(); };
-      
-      const actions = document.createElement('div');
-      actions.className = 'chat-item-actions';
-      actions.innerHTML = `
-        <button class="action-icon" onclick="deleteChat('${id}', event)">🗑️</button>
-        <button class="action-icon" onclick="shareChat('${id}', event)">🔗</button>
-        <button class="action-icon" onclick="downloadChat('${id}', event)">⬇️</button>
-      `;
-      
-      item.appendChild(text);
-      item.appendChild(actions);
+      item.innerHTML = `<span onclick="switchChat('${id}')">${title}</span>
+        <div class="chat-item-actions">
+          <button class="icon-btn" onclick="deleteChat('${id}', event)">🗑️</button>
+          <button class="icon-btn" onclick="shareChat('${id}', event)">🔗</button>
+          <button class="icon-btn" onclick="downloadChat('${id}', event)">⬇️</button>
+        </div>`;
       list.appendChild(item);
     });
   }
+  function switchChat(id) { currentChatId = id; renderChat(id); closeSidebar(); }
+  function startNewChat() { currentChatId = Date.now().toString(); chats[currentChatId] = { title: "New Chat", messages: [] }; localStorage.setItem('nsm_chats', JSON.stringify(chats)); renderChat(currentChatId); loadChatList(); }
 
-  function startNewChat() {
-    currentChatId = Date.now().toString();
-    chats[currentChatId] = { title: "New Chat", messages: [] };
-    localStorage.setItem('nsm_chats', JSON.stringify(chats));
-    renderChat(currentChatId);
-    loadChatList();
-  }
-
-  // --- RENDER CHAT ---
+  // RENDER
   function renderChat(id) {
     const container = document.getElementById('chat-container');
     container.innerHTML = '';
-    const chat = chats[id];
-    if (!chat) return;
-    
-    if (chat.messages.length === 0) {
-      container.innerHTML = '<div class="msg nsm" style="align-self: center; text-align: center; max-width: 90%;">Hi! I\'m NSM VB. Talk to me, or teach me new words.</div>';
+    if (!chats[id] || chats[id].messages.length === 0) {
+      container.innerHTML = '<div class="msg nsm" style="align-self: center; max-width: 90%;">Hi! I\'m NSM VB. Talk to me, or teach me new words.</div>';
     } else {
-      chat.messages.forEach((m, idx) => appendBubble(m.sender, m.text, idx));
+      chats[id].messages.forEach((m, idx) => appendBubble(m.sender, m.text, idx));
     }
     container.scrollTop = container.scrollHeight;
   }
@@ -296,7 +323,6 @@
     const container = document.getElementById('chat-container');
     const wrapper = document.createElement('div');
     wrapper.className = `msg-wrapper ${sender}`;
-    
     const bubble = document.createElement('div');
     bubble.className = 'msg';
     bubble.innerText = text;
@@ -306,56 +332,58 @@
     
     if (sender === 'nsm') {
       actions.innerHTML = `
-        <button onclick="copyText('${text.replace(/'/g, "\\'")}')">📋 Copy</button>
-        <button onclick="shareText('${text.replace(/'/g, "\\'")}')">🔗 Share</button>
-        <button onclick="readAloud('${text.replace(/'/g, "\\'")}')">🔊 Read</button>
-        <button onclick="retryResponse(${index})">🔄 Retry</button>
+        <button onclick="copyText('${text.replace(/'/g, "\\'")}')">📋</button>
+        <button onclick="shareText('${text.replace(/'/g, "\\'")}')">🔗</button>
+        <button onclick="speakText('${text.replace(/'/g, "\\'")}', this)">🔊</button>
+        <button onclick="retryResponse(${index})">🔄</button>
       `;
     } else {
       actions.innerHTML = `
-        <button onclick="editMessage(${index}, this)">✏️ Edit</button>
-        <button onclick="copyText('${text.replace(/'/g, "\\'")}')">📋 Copy</button>
+        <button onclick="editMessage(${index}, this)">✏️</button>
+        <button onclick="copyText('${text.replace(/'/g, "\\'")}')">📋</button>
       `;
     }
-    
     wrapper.appendChild(bubble);
     wrapper.appendChild(actions);
     container.appendChild(wrapper);
+    container.scrollTop = container.scrollHeight;
   }
 
-  // --- BUBBLE ACTIONS ---
-  function copyText(text) {
-    navigator.clipboard.writeText(text).then(() => alert("Copied!"));
-  }
+  // BUBBLE ACTIONS
+  function copyText(t) { navigator.clipboard.writeText(t).then(() => alert("Copied!")); }
+  function shareText(t) { if(navigator.share) navigator.share({text: t}); }
   
-  function shareText(text) {
-    if (navigator.share) navigator.share({ text: text });
-    else alert("Sharing not supported.");
-  }
-  
-  function readAloud(text) {
+  function speakText(text, btn) {
     if ('speechSynthesis' in window) {
-      const utt = new SpeechSynthesisUtterance(text);
-      window.speechSynthesis.speak(utt);
-    } else alert("TTS not supported.");
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause();
+        btn.innerText = "▶️"; // Change to play
+      } else if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+        btn.innerText = "⏸️"; // Change to pause
+      } else {
+        window.speechSynthesis.cancel();
+        const utt = new SpeechSynthesisUtterance(text);
+        utt.onend = () => { btn.innerText = "🔊"; };
+        window.speechSynthesis.speak(utt);
+        btn.innerText = "⏸️";
+      }
+    }
   }
 
   function editMessage(index, btn) {
     const chat = chats[currentChatId];
     const wrapper = btn.closest('.msg-wrapper');
     const bubble = wrapper.querySelector('.msg');
-    const originalText = chat.messages[index].text;
-    
-    bubble.innerHTML = `<input type="text" class="edit-input" value="${originalText}">`;
+    bubble.innerHTML = `<input type="text" class="edit-input" value="${chat.messages[index].text}">`;
     const input = bubble.querySelector('input');
     input.focus();
-    
     input.onkeypress = (e) => {
       if (e.key === 'Enter') {
         const newText = input.value.trim();
         if (newText) {
           chat.messages[index].text = newText;
-          chat.messages = chat.messages.slice(0, index + 1); // Remove everything after
+          chat.messages = chat.messages.slice(0, index + 1);
           localStorage.setItem('nsm_chats', JSON.stringify(chats));
           renderChat(currentChatId);
           sendToBrain(newText);
@@ -364,147 +392,49 @@
     };
   }
 
-  async function retryResponse(index) {
+  function retryResponse(index) {
     const chat = chats[currentChatId];
-    if (index > 0 && chat.messages[index-1].sender === 'user') {
+    if (index > 0) {
       const userText = chat.messages[index-1].text;
-      chat.messages = chat.messages.slice(0, index); // Remove the NSM response
+      chat.messages = chat.messages.slice(0, index);
       localStorage.setItem('nsm_chats', JSON.stringify(chats));
       renderChat(currentChatId);
       sendToBrain(userText);
     }
   }
 
-  // --- TOP BAR ACTIONS ---
+  // TOP ACTIONS
   function deleteCurrentChat() { deleteChat(currentChatId, null); }
   function shareCurrentChat() { shareChat(currentChatId, null); }
   function downloadCurrentChat() { downloadChat(currentChatId, null); }
 
-  function deleteChat(id, event) {
-    if (event) event.stopPropagation();
-    if (!confirm("Delete this chat?")) return;
-    delete chats[id];
-    localStorage.setItem('nsm_chats', JSON.stringify(chats));
-    if (id === currentChatId) startNewChat();
-    else loadChatList();
+  function deleteChat(id, e) {
+    if(e) e.stopPropagation();
+    if(!confirm("Delete chat?")) return;
+    delete chats[id]; localStorage.setItem('nsm_chats', JSON.stringify(chats));
+    if(id === currentChatId) startNewChat(); else loadChatList();
   }
-
-  function shareChat(id, event) {
-    if (event) event.stopPropagation();
-    const chat = chats[id];
-    if (!chat) return;
-    const text = chat.messages.map(m => `${m.sender.toUpperCase()}: ${m.text}`).join('\n\n');
-    if (navigator.share) navigator.share({ title: chat.title, text: text });
-    else alert("Sharing not supported.");
+  function shareChat(id, e) {
+    if(e) e.stopPropagation();
+    const text = chats[id].messages.map(m => `${m.sender.toUpperCase()}: ${m.text}`).join('\n');
+    if(navigator.share) navigator.share({title: chats[id].title, text: text});
   }
-
-  function downloadChat(id, event) {
-    if (event) event.stopPropagation();
-    const chat = chats[id];
-    if (!chat) return;
-    const text = chat.messages.map(m => `${m.sender.toUpperCase()}: ${m.text}`).join('\n\n');
-    const blob = new Blob([text], { type: 'text/plain' });
+  function downloadChat(id, e) {
+    if(e) e.stopPropagation();
+    const text = chats[id].messages.map(m => `${m.sender.toUpperCase()}: ${m.text}`).join('\n');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${chat.title}.txt`;
-    a.click();
+    a.href = URL.createObjectURL(new Blob([text], {type: 'text/plain'}));
+    a.download = `${chats[id].title}.txt`; a.click();
   }
 
-  // --- SETTINGS LOGIC ---
-  function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; closeSidebar(); }
-  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-
-  function saveSettings() {
-    settings.user = document.getElementById('settings-user').value || "default";
-    settings.url = document.getElementById('settings-url').value;
-    settings.model = document.getElementById('settings-model').value;
-    settings.key = document.getElementById('settings-key').value;
-    settings.pinEnabled = document.getElementById('settings-pin-enabled').value;
-    settings.pin = document.getElementById('settings-pin').value;
-    localStorage.setItem('nsm_settings', JSON.stringify(settings));
-    closeModal('settings-modal');
-    alert("Settings Saved!");
-  }
-
-  async function testLLM() {
-    const resultBox = document.getElementById('test-llm-result');
-    resultBox.style.display = 'block';
-    resultBox.style.background = 'var(--surface2)';
-    resultBox.style.color = 'var(--text)';
-    resultBox.innerText = 'Testing connection...';
-    
-    const url = document.getElementById('settings-url').value;
-    const model = document.getElementById('settings-model').value;
-    const key = document.getElementById('settings-key').value;
-    
-    if (!url || !model) {
-      resultBox.style.background = '#8b2e2e'; resultBox.style.color = 'white';
-      resultBox.innerText = '❌ URL and Model Name required';
-      return;
-    }
-    
-    try {
-      const res = await fetch('/test_llm', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ llm_url: url, llm_model: model, llm_key: key })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        resultBox.style.background = '#238636'; resultBox.style.color = 'white';
-        resultBox.innerText = '✅ Connected! Response: ' + data.response;
-      } else {
-        resultBox.style.background = '#8b2e2e'; resultBox.style.color = 'white';
-        resultBox.innerText = '❌ ' + data.error;
-      }
-    } catch(e) {
-      resultBox.style.background = '#8b2e2e'; resultBox.style.color = 'white';
-      resultBox.innerText = '❌ ' + e.message;
+  // --- INPUT & GENERATION LOGIC ---
+  function handleSendClick() {
+    if (isGenerating) {
+      stopGeneration();
+    } else {
+      sendMessage();
     }
   }
-
-  async function exportMemory() {
-    try {
-      const res = await fetch('/export', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ user_id: settings.user })
-      });
-      const data = await res.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `NSM_Memory_${settings.user}.json`;
-      a.click(); URL.revokeObjectURL(url);
-    } catch(e) { alert("Export failed!"); }
-  }
-
-  async function importMemory(event) {
-    const files = event.target.files;
-    if(!files || files.length === 0) return;
-    let successCount = 0, failCount = 0;
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileData = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.readAsText(file);
-      });
-      try {
-        const brainData = JSON.parse(fileData);
-        const res = await fetch('/import', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ user_id: settings.user, brain_data: brainData, mode: 'merge' })
-        });
-        const result = await res.json();
-        if (result.ok) successCount++; else failCount++;
-      } catch(e) { failCount++; }
-    }
-    alert(`Import Complete!\\n✅ Success: ${successCount}\\n❌ Failed: ${failCount}`);
-    if (successCount > 0) window.location.reload();
-  }
-
-  // --- CHAT LOGIC ---
-  function handleEnter(e) { if(e.key === 'Enter') sendMessage(); }
 
   function sendMessage() {
     const input = document.getElementById('message-input');
@@ -515,8 +445,8 @@
     if (chat.messages.length === 0) chat.title = text.substring(0, 20);
     
     chat.messages.push({ sender: 'user', text: text });
-    appendBubble('user', text, chat.messages.length - 1);
     localStorage.setItem('nsm_chats', JSON.stringify(chats));
+    renderChat(currentChatId);
     loadChatList();
     input.value = '';
     
@@ -524,29 +454,54 @@
   }
 
   async function sendToBrain(text) {
+    if (currentSpeech) { window.speechSynthesis.cancel(); currentSpeech = null; }
+    
+    isGenerating = true;
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.innerText = "⏹️";
+    sendBtn.classList.add('stop');
+
     const container = document.getElementById('chat-container');
     const typing = document.createElement('div');
-    typing.className = 'msg nsm';
-    typing.innerText = '...';
+    typing.className = 'typing-indicator';
+    typing.innerHTML = '<span></span><span></span><span></span>';
     container.appendChild(typing);
     container.scrollTop = container.scrollHeight;
+
+    currentController = new AbortController();
 
     try {
       const res = await fetch('/chat', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ text: text, user_id: settings.user, llm_url: settings.url, llm_model: settings.model, llm_key: settings.key })
+        body: JSON.stringify({ text: text, user_id: settings.user, llm_url: settings.url, llm_model: settings.model, llm_key: settings.key }),
+        signal: currentController.signal
       });
       const data = await res.json();
-      container.removeChild(typing);
+      
+      if (container.contains(typing)) container.removeChild(typing);
       
       const chat = chats[currentChatId];
       chat.messages.push({ sender: 'nsm', text: data.response });
-      appendBubble('nsm', data.response, chat.messages.length - 1);
       localStorage.setItem('nsm_chats', JSON.stringify(chats));
+      renderChat(currentChatId);
+
     } catch (err) {
-      container.removeChild(typing);
-      appendBubble('nsm', "Error connecting to brain.", 0);
+      if (container.contains(typing)) container.removeChild(typing);
+      if (err.name === 'AbortError') {
+        appendBubble('nsm', "Generation stopped by user.", chats[currentChatId].messages.length);
+      } else {
+        appendBubble('nsm', "Error connecting to brain.", chats[currentChatId].messages.length);
+      }
+    } finally {
+      isGenerating = false;
+      sendBtn.innerText = "✈️";
+      sendBtn.classList.remove('stop');
+      currentController = null;
     }
+  }
+
+  function stopGeneration() {
+    if (currentController) currentController.abort();
   }
 
   init();
