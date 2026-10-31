@@ -60,3 +60,13 @@ def delete_brain(user_id):
 
 # Initialize on import
 init_db()
+
+
+def list_brains():
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM brains")
+    rows = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in rows]

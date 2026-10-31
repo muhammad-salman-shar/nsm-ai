@@ -63,6 +63,8 @@ class Handler(BaseHTTPRequestHandler):
             _html_response(self, os.path.join(STATIC_DIR, "index.html"))
         elif parsed.path == "/state":
             _json_response(self, 200, get_brain().state())
+        elif parsed.path == "/brains":
+            _json_response(self, 200, {"brains": database.list_brains()})
         elif parsed.path == "/health":
             _json_response(self, 200, {"ok": True, "service": "NSM", "port": 8081})
         elif parsed.path == "/debug":
@@ -179,6 +181,12 @@ class Handler(BaseHTTPRequestHandler):
             result = brain.observe_bulk(text, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
             database.save_brain(user_id, persistence.to_dict(brain))
             _json_response(self, 200, result)
+        elif parsed.path == "/delete_brain":
+            user_id = data.get("user_id", "default")
+            database.delete_brain(user_id)
+            if user_id in _brain_cache:
+                del _brain_cache[user_id]
+            _json_response(self, 200, {"ok": True, "message": f"Deleted brain: {user_id}"})
         elif parsed.path == "/reset":
             user_id = data.get("user_id", "default")
             database.delete_brain(user_id)
