@@ -18,6 +18,11 @@
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
   body { background: var(--bg); color: var(--text); display: flex; height: 100vh; height: 100dvh; overflow: hidden; transition: background 0.3s; }
   
+  /* SVG ICONS */
+  .svg-icon { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .svg-icon-sm { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .svg-icon-lg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
   /* SIDEBAR */
   #sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
   #sidebar-overlay.open { display: block; }
@@ -27,17 +32,18 @@
   #chat-list { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
   .chat-item { padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text); display: flex; justify-content: space-between; align-items: center; background: var(--surface2); }
   .chat-item.active { border-left: 3px solid var(--accent); }
-  .chat-item-actions { display: flex; gap: 4px; opacity: 0.6; }
-  .icon-btn { background: none; border: none; cursor: pointer; color: var(--text); font-size: 16px; padding: 4px; }
+  .chat-item-actions { display: flex; gap: 6px; opacity: 0.6; }
+  .icon-btn { background: none; border: none; cursor: pointer; color: var(--text); padding: 4px; display: flex; align-items: center; justify-content: center; }
+  .icon-btn:active { color: var(--accent); }
   #sidebar-bottom { padding: 16px; border-top: 1px solid var(--border); }
-  .btn-settings { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; }
+  .btn-settings { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
   /* MAIN */
   #main { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
   header { padding: 12px 16px; background: var(--surface); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .header-title { display: flex; align-items: center; gap: 10px; font-weight: bold; }
-  .header-actions { display: flex; gap: 8px; }
-  .header-actions button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+  .header-actions { display: flex; gap: 6px; }
+  .header-actions button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   
   /* CHAT */
   #chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
@@ -49,8 +55,8 @@
   .nsm .msg { background: var(--nsm-bg); color: var(--text); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
   
   /* BUBBLE ACTIONS */
-  .msg-actions { display: flex; gap: 12px; margin-top: 4px; opacity: 0.7; }
-  .msg-actions button { background: none; border: none; color: var(--text-dim); font-size: 14px; cursor: pointer; }
+  .msg-actions { display: flex; gap: 10px; margin-top: 6px; opacity: 0.6; }
+  .msg-actions button { background: none; border: none; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .msg-actions button:active { color: var(--accent); }
   .edit-input { width: 100%; background: transparent; color: white; border: none; border-bottom: 1px solid white; outline: none; font-size: 15px; }
 
@@ -64,34 +70,58 @@
   /* INPUT */
   #input-area { padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 12px; flex-shrink: 0; }
   #message-input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 14px 18px; border-radius: 24px; outline: none; font-size: 15px; }
-  .send-btn { background: var(--accent); color: white; border: none; padding: 0 16px; border-radius: 24px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 50px; }
+  .send-btn { background: var(--accent); color: white; border: none; padding: 0 16px; border-radius: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 52px; height: 48px; transition: background 0.2s; }
   .send-btn.stop { background: #8b2e2e; }
 
   /* SETTINGS MODAL & SUB-MENUS */
   .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
   .modal-content { background: var(--surface); padding: 20px; border-radius: 16px; width: 90%; max-width: 400px; border: 1px solid var(--border); max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; position: relative; }
   
-  /* Settings Menu List */
   .settings-menu { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .settings-item { padding: 16px; background: var(--surface2); border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 500; transition: 0.2s; }
   .settings-item:active { background: var(--border); }
+  .settings-item-left { display: flex; align-items: center; gap: 12px; }
   
-  /* Settings Sub-Views */
   .settings-view { display: none; flex-direction: column; height: 100%; overflow-y: auto; }
   .settings-view.active { display: flex; }
   .settings-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-  .back-btn { background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; padding: 4px 8px 4px 0; }
+  .back-btn { background: none; border: none; color: var(--text); cursor: pointer; padding: 4px 8px 4px 0; display: flex; align-items: center; }
   .settings-group label { display: block; font-size: 13px; color: var(--text-dim); margin: 12px 0 6px 0; font-weight: 500; }
   .settings-group input, .settings-group select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; outline: none; font-size: 14px; }
   .btn-primary { background: var(--accent); color: white; border: none; padding: 14px; border-radius: 10px; cursor: pointer; width: 100%; font-weight: 600; margin-top: auto; }
-  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; margin-top: 8px; }
+  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; margin-top: 8px; display: flex; justify-content: center; align-items: center; gap: 8px;}
   #test-llm-result { margin-top: 10px; font-size: 13px; padding: 10px; border-radius: 8px; display: none; text-align: center; }
 </style>
 </head>
 <body>
 
+<!-- ICON DEFINITIONS (SVG) -->
+<svg style="display: none;">
+  <symbol id="i-menu" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" ry="2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+  <symbol id="i-paint" viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
+</svg>
+
 <div id="pin-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; flex-direction: column; justify-content: center; align-items: center;">
-  <h2 style="color: var(--accent); margin-bottom: 20px;">🔒 NSM is Locked</h2>
+  <svg class="svg-icon-lg" style="color: var(--accent); width: 48px; height: 48px; margin-bottom: 20px;"><use href="#i-lock"/></svg>
+  <h2 style="color: var(--accent); margin-bottom: 20px;">NSM is Locked</h2>
   <input type="password" id="pin-input" maxlength="4" placeholder="****" oninput="checkPin()" style="width: 200px; text-align: center; font-size: 24px; letter-spacing: 5px; background: var(--surface); border: 2px solid var(--accent); color: var(--text); padding: 10px; border-radius: 8px; outline: none;">
   <p id="pin-error" style="color:red; margin-top:10px; display:none;">Wrong PIN</p>
 </div>
@@ -103,21 +133,23 @@
   </div>
   <div id="chat-list"></div>
   <div id="sidebar-bottom">
-    <button class="btn-settings" onclick="openSettings()">⚙️ Settings</button>
+    <button class="btn-settings" onclick="openSettings()">
+      <svg class="svg-icon"><use href="#i-settings"/></svg> Settings
+    </button>
   </div>
 </div>
 
 <div id="main">
   <header>
     <div class="header-title">
-      <button class="icon-btn" onclick="openSidebar()" style="font-size: 20px;">☰</button>
+      <button class="icon-btn" onclick="openSidebar()" style="font-size: 20px;"><svg class="svg-icon"><use href="#i-menu"/></svg></button>
       <span>NSM VB</span>
     </div>
     <div class="header-actions">
-      <button onclick="startNewChat()">＋</button>
-      <button onclick="deleteCurrentChat()">🗑️</button>
-      <button onclick="shareCurrentChat()">🔗</button>
-      <button onclick="downloadCurrentChat()">⬇️</button>
+      <button onclick="startNewChat()"><svg class="svg-icon"><use href="#i-plus"/></svg></button>
+      <button onclick="deleteCurrentChat()"><svg class="svg-icon"><use href="#i-trash"/></svg></button>
+      <button onclick="shareCurrentChat()"><svg class="svg-icon"><use href="#i-share"/></svg></button>
+      <button onclick="downloadCurrentChat()"><svg class="svg-icon"><use href="#i-download"/></svg></button>
     </div>
   </header>
   
@@ -125,7 +157,9 @@
 
   <div id="input-area">
     <input type="text" id="message-input" onkeypress="handleEnter(event)" autocomplete="off">
-    <button id="send-btn" class="send-btn" onclick="handleSendClick()">✈️</button>
+    <button id="send-btn" class="send-btn" onclick="handleSendClick()">
+      <svg class="svg-icon-lg"><use href="#i-send"/></svg>
+    </button>
   </div>
 </div>
 
@@ -137,10 +171,22 @@
     <div id="settings-main" class="settings-view active">
       <h2 style="margin-bottom: 16px;">Settings</h2>
       <div class="settings-menu">
-        <div class="settings-item" onclick="showSettingsView('general')">🎨 Appearance <span>></span></div>
-        <div class="settings-item" onclick="showSettingsView('llm')">🤖 AI Model <span>></span></div>
-        <div class="settings-item" onclick="showSettingsView('security')">🔒 Security <span>></span></div>
-        <div class="settings-item" onclick="showSettingsView('data')">💾 Data & Memory <span>></span></div>
+        <div class="settings-item" onclick="showSettingsView('general')">
+          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-paint"/></svg> Appearance</div>
+          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="settings-item" onclick="showSettingsView('llm')">
+          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-cpu"/></svg> AI Model</div>
+          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="settings-item" onclick="showSettingsView('security')">
+          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-lock"/></svg> Security</div>
+          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
+        </div>
+        <div class="settings-item" onclick="showSettingsView('data')">
+          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-database"/></svg> Data & Memory</div>
+          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
+        </div>
       </div>
       <button class="btn-secondary" style="margin-top: 20px;" onclick="closeModal('settings-modal')">Close</button>
     </div>
@@ -148,7 +194,7 @@
     <!-- GENERAL VIEW -->
     <div id="settings-general" class="settings-view">
       <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
         <h2>Appearance</h2>
       </div>
       <div class="settings-group">
@@ -167,7 +213,7 @@
     <!-- LLM VIEW -->
     <div id="settings-llm" class="settings-view">
       <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
         <h2>AI Model</h2>
       </div>
       <div class="settings-group">
@@ -186,7 +232,7 @@
     <!-- SECURITY VIEW -->
     <div id="settings-security" class="settings-view">
       <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
         <h2>Security</h2>
       </div>
       <div class="settings-group">
@@ -204,12 +250,12 @@
     <!-- DATA VIEW -->
     <div id="settings-data" class="settings-view">
       <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')">←</button>
+        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
         <h2>Data & Memory</h2>
       </div>
       <div class="settings-group">
-        <button class="btn-secondary" onclick="exportMemory()">⬇️ Export Memory</button>
-        <button class="btn-secondary" onclick="document.getElementById('import-file').click()">⬆️ Import Memory</button>
+        <button class="btn-secondary" onclick="exportMemory()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-download"/></svg> Export Memory</button>
+        <button class="btn-secondary" onclick="document.getElementById('import-file').click()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-refresh"/></svg> Import Memory</button>
         <input type="file" id="import-file" style="display:none" accept=".json" multiple onchange="importMemory(event)">
       </div>
       <button class="btn-primary" onclick="showSettingsView('main')">Back</button>
@@ -223,9 +269,8 @@
   let chats = JSON.parse(localStorage.getItem('nsm_chats') || '{}');
   let settings = JSON.parse(localStorage.getItem('nsm_settings') || '{"user": "default", "theme": "system", "pinEnabled": "off"}');
   
-  let currentController = null; // For aborting fetch
+  let currentController = null;
   let isGenerating = false;
-  let currentSpeech = null;
 
   function init() {
     applyTheme(settings.theme || 'system');
@@ -244,7 +289,6 @@
     loadChatList();
   }
 
-  // THEME & SIDEBAR
   function applyTheme(theme) {
     if (theme === 'system') {
       const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -265,7 +309,6 @@
   function openSidebar() { document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebar-overlay').classList.add('open'); }
   function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('open'); }
 
-  // SETTINGS
   function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; closeSidebar(); showSettingsView('main'); }
   function closeModal(id) { document.getElementById(id).style.display = 'none'; }
   function showSettingsView(view) {
@@ -284,9 +327,6 @@
     alert("Settings Saved!");
   }
 
-  async function testLLM() { /* Same as before */ }
-
-  // CHAT LIST
   function loadChatList(query = "") {
     const list = document.getElementById('chat-list');
     list.innerHTML = '';
@@ -295,11 +335,11 @@
       if (query && !title.toLowerCase().includes(query.toLowerCase())) return;
       const item = document.createElement('div');
       item.className = 'chat-item' + (id === currentChatId ? ' active' : '');
-      item.innerHTML = `<span onclick="switchChat('${id}')">${title}</span>
+      item.innerHTML = `<span onclick="switchChat('${id}')" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${title}</span>
         <div class="chat-item-actions">
-          <button class="icon-btn" onclick="deleteChat('${id}', event)">🗑️</button>
-          <button class="icon-btn" onclick="shareChat('${id}', event)">🔗</button>
-          <button class="icon-btn" onclick="downloadChat('${id}', event)">⬇️</button>
+          <button class="icon-btn" onclick="deleteChat('${id}', event)"><svg class="svg-icon-sm"><use href="#i-trash"/></svg></button>
+          <button class="icon-btn" onclick="shareChat('${id}', event)"><svg class="svg-icon-sm"><use href="#i-share"/></svg></button>
+          <button class="icon-btn" onclick="downloadChat('${id}', event)"><svg class="svg-icon-sm"><use href="#i-download"/></svg></button>
         </div>`;
       list.appendChild(item);
     });
@@ -307,7 +347,6 @@
   function switchChat(id) { currentChatId = id; renderChat(id); closeSidebar(); }
   function startNewChat() { currentChatId = Date.now().toString(); chats[currentChatId] = { title: "New Chat", messages: [] }; localStorage.setItem('nsm_chats', JSON.stringify(chats)); renderChat(currentChatId); loadChatList(); }
 
-  // RENDER
   function renderChat(id) {
     const container = document.getElementById('chat-container');
     container.innerHTML = '';
@@ -332,15 +371,15 @@
     
     if (sender === 'nsm') {
       actions.innerHTML = `
-        <button onclick="copyText('${text.replace(/'/g, "\\'")}')">📋</button>
-        <button onclick="shareText('${text.replace(/'/g, "\\'")}')">🔗</button>
-        <button onclick="speakText('${text.replace(/'/g, "\\'")}', this)">🔊</button>
-        <button onclick="retryResponse(${index})">🔄</button>
+        <button onclick="copyText('${text.replace(/'/g, "\\'")}')"><svg class="svg-icon-sm"><use href="#i-copy"/></svg></button>
+        <button onclick="shareText('${text.replace(/'/g, "\\'")}')"><svg class="svg-icon-sm"><use href="#i-share"/></svg></button>
+        <button onclick="speakText('${text.replace(/'/g, "\\'")}', this)"><svg class="svg-icon-sm"><use href="#i-volume"/></svg></button>
+        <button onclick="retryResponse(${index})"><svg class="svg-icon-sm"><use href="#i-refresh"/></svg></button>
       `;
     } else {
       actions.innerHTML = `
-        <button onclick="editMessage(${index}, this)">✏️</button>
-        <button onclick="copyText('${text.replace(/'/g, "\\'")}')">📋</button>
+        <button onclick="editMessage(${index}, this)"><svg class="svg-icon-sm"><use href="#i-edit"/></svg></button>
+        <button onclick="copyText('${text.replace(/'/g, "\\'")}')"><svg class="svg-icon-sm"><use href="#i-copy"/></svg></button>
       `;
     }
     wrapper.appendChild(bubble);
@@ -349,7 +388,6 @@
     container.scrollTop = container.scrollHeight;
   }
 
-  // BUBBLE ACTIONS
   function copyText(t) { navigator.clipboard.writeText(t).then(() => alert("Copied!")); }
   function shareText(t) { if(navigator.share) navigator.share({text: t}); }
   
@@ -357,16 +395,16 @@
     if ('speechSynthesis' in window) {
       if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
         window.speechSynthesis.pause();
-        btn.innerText = "▶️"; // Change to play
+        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-play"/></svg>';
       } else if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
-        btn.innerText = "⏸️"; // Change to pause
+        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
       } else {
         window.speechSynthesis.cancel();
         const utt = new SpeechSynthesisUtterance(text);
-        utt.onend = () => { btn.innerText = "🔊"; };
+        utt.onend = () => { btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>'; };
         window.speechSynthesis.speak(utt);
-        btn.innerText = "⏸️";
+        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
       }
     }
   }
@@ -403,7 +441,6 @@
     }
   }
 
-  // TOP ACTIONS
   function deleteCurrentChat() { deleteChat(currentChatId, null); }
   function shareCurrentChat() { shareChat(currentChatId, null); }
   function downloadCurrentChat() { downloadChat(currentChatId, null); }
@@ -427,38 +464,27 @@
     a.download = `${chats[id].title}.txt`; a.click();
   }
 
-  // --- INPUT & GENERATION LOGIC ---
-  function handleSendClick() {
-    if (isGenerating) {
-      stopGeneration();
-    } else {
-      sendMessage();
-    }
-  }
+  function handleSendClick() { if (isGenerating) stopGeneration(); else sendMessage(); }
 
   function sendMessage() {
     const input = document.getElementById('message-input');
     const text = input.value.trim();
     if(!text) return;
-    
     const chat = chats[currentChatId];
     if (chat.messages.length === 0) chat.title = text.substring(0, 20);
-    
     chat.messages.push({ sender: 'user', text: text });
     localStorage.setItem('nsm_chats', JSON.stringify(chats));
     renderChat(currentChatId);
     loadChatList();
     input.value = '';
-    
     sendToBrain(text);
   }
 
   async function sendToBrain(text) {
-    if (currentSpeech) { window.speechSynthesis.cancel(); currentSpeech = null; }
-    
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
     isGenerating = true;
     const sendBtn = document.getElementById('send-btn');
-    sendBtn.innerText = "⏹️";
+    sendBtn.innerHTML = '<svg class="svg-icon-lg"><use href="#i-stop"/></svg>';
     sendBtn.classList.add('stop');
 
     const container = document.getElementById('chat-container');
@@ -477,14 +503,11 @@
         signal: currentController.signal
       });
       const data = await res.json();
-      
       if (container.contains(typing)) container.removeChild(typing);
-      
       const chat = chats[currentChatId];
       chat.messages.push({ sender: 'nsm', text: data.response });
       localStorage.setItem('nsm_chats', JSON.stringify(chats));
       renderChat(currentChatId);
-
     } catch (err) {
       if (container.contains(typing)) container.removeChild(typing);
       if (err.name === 'AbortError') {
@@ -494,16 +517,12 @@
       }
     } finally {
       isGenerating = false;
-      sendBtn.innerText = "✈️";
+      sendBtn.innerHTML = '<svg class="svg-icon-lg"><use href="#i-send"/></svg>';
       sendBtn.classList.remove('stop');
       currentController = null;
     }
   }
-
-  function stopGeneration() {
-    if (currentController) currentController.abort();
-  }
-
+  function stopGeneration() { if (currentController) currentController.abort(); }
   init();
 </script>
 </body>
