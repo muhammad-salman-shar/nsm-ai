@@ -17,6 +17,8 @@ Output ONLY the rewritten sentence, nothing else."""
 
 def improve_language(raw_text, user_input="", llm_url=None, llm_model=None, llm_key=None):
     url = llm_url or os.environ.get("NSM_LLM_URL", DEFAULT_URL)
+    if url and not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
     model = llm_model or os.environ.get("NSM_LLM_MODEL", DEFAULT_MODEL)
     api_key = llm_key or os.environ.get("NSM_LLM_KEY", "")
 
@@ -72,6 +74,12 @@ def test_llm_connection(llm_url, llm_model, llm_key=None):
         return {"ok": False, "error": "URL is empty"}
     if not llm_model:
         return {"ok": False, "error": "Model name is empty"}
+        
+    # Auto-fix URL
+    if llm_url.endswith("/v1"):
+        llm_url += "/chat/completions"
+    elif not llm_url.endswith("/chat/completions"):
+        llm_url = llm_url.rstrip("/") + "/chat/completions"
     
     messages = [{"role": "user", "content": "Say OK"}]
     data = {"model": llm_model, "messages": messages, "max_tokens": 10, "stream": False}

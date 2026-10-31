@@ -126,7 +126,14 @@
     <button class="btn" style="margin-top:16px; background:#1f6feb; color:white;" onclick="testLLMConnection()">🔗 Test LLM Connection</button>
     <div id="test-llm-result" style="margin-top:8px; font-size:12px; padding:8px; border-radius:6px; display:none;"></div>
     <button class="btn btn-primary" style="margin-top:16px;" onclick="saveSettings()">Save Settings</button>
-    <button class="btn" onclick="closeModal('settings-modal')">Cancel</button>
+    
+    <hr style="border-color:#30363d; margin: 16px 0;">
+    <h3 style="font-size:14px; margin-bottom:8px;">💾 Memory Backup</h3>
+    <button class="btn" style="background:#1f6feb; color:white;" onclick="exportMemory()">⬇️ Export Memory</button>
+    <button class="btn" style="background:#2ea043; color:white;" onclick="document.getElementById('import-file').click()">⬆️ Import Memory</button>
+    <input type="file" id="import-file" style="display:none" accept=".json" onchange="importMemory(event)">
+    
+    <button class="btn" style="margin-top:16px; background:transparent;" onclick="closeModal('settings-modal')">Cancel</button>
   </div>
 </div>
 
@@ -293,6 +300,40 @@
       resultBox.style.background = '#8b2e2e';
       resultBox.innerText = '❌ ' + e.message;
     }
+  }
+
+  async function exportMemory() {
+    try {
+      const res = await fetch('/export', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: settings.user })
+      });
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `NSM_Memory_${settings.user}.json`;
+      a.click(); URL.revokeObjectURL(url);
+      alert("Memory Exported Successfully!");
+    } catch(e) { alert("Export failed!"); }
+  }
+
+  async function importMemory(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const brainData = JSON.parse(e.target.result);
+        await fetch('/import', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ user_id: settings.user, brain_data: brainData })
+        });
+        alert("Brain imported successfully! Please restart the app.");
+        window.location.reload();
+      } catch(e) { alert("Import failed! Invalid file."); }
+    };
+    reader.readAsText(file);
   }
 
   async function fetchDashboard() {
