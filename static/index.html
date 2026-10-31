@@ -131,7 +131,7 @@
     <h3 style="font-size:14px; margin-bottom:8px;">💾 Memory Backup</h3>
     <button class="btn" style="background:#1f6feb; color:white;" onclick="exportMemory()">⬇️ Export Memory</button>
     <button class="btn" style="background:#2ea043; color:white;" onclick="document.getElementById('import-file').click()">⬆️ Import Memory</button>
-    <input type="file" id="import-file" style="display:none" accept=".json" onchange="importMemory(event)">
+    <input type="file" id="import-file" style="display:none" accept=".json" multiple onchange="importMemory(event)">
     
     <button class="btn" style="margin-top:16px; background:transparent;" onclick="closeModal('settings-modal')">Cancel</button>
   </div>
@@ -319,21 +319,48 @@
   }
 
   async function importMemory(event) {
-    const file = event.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
+    const files = event.target.files;
+    if(!files || files.length === 0) return;
+    
+    let successCount = 0;
+    let failCount = 0;
+    let errors = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+      
+      const fileData = await new Promise((resolve) => {
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsText(file);
+      });
+
       try {
-        const brainData = JSON.parse(e.target.result);
-        await fetch('/import', {
+        const brainData = JSON.parse(fileData);
+        const res = await fetch('/import', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ user_id: settings.user, brain_data: brainData })
+          body: JSON.stringify({ user_id: settings.user, brain_data: brainData, mode: 'merge' })
         });
-        alert("Brain imported successfully! Please restart the app.");
-        window.location.reload();
-      } catch(e) { alert("Import failed! Invalid file."); }
-    };
-    reader.readAsText(file);
+        const result = await res.json();
+        if (result.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          errors.push(file.name + ": " + result.error);
+        }
+      } catch(err) {
+        failCount++;
+        errors.push(file.name + ": Invalid JSON format");
+      }
+    }
+
+    let msg = `Import Complete!\n✅ Success: ${successCount}\n❌ Failed: ${failCount}`;
+    if (errors.length > 0) {
+      msg += `\n\nErrors:\n` + errors.slice(0, 5).join("\n");
+      if (errors.length > 5) msg += `\n...and ${errors.length - 5} more`;
+    }
+    alert(msg);
+    if (successCount > 0) window.location.reload();
   }
 
   async function fetchDashboard() {
