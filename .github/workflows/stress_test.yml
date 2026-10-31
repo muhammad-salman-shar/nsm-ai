@@ -1,6 +1,10 @@
 name: Stress Test
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/stress_test.yml'
+      - 'tests/test_stress.py'
 jobs:
   stress:
     runs-on: ubuntu-latest
@@ -13,4 +17,4 @@ jobs:
       - name: Install deps
         run: pip install numpy
       - name: Run Stress Tests
-        run: python -m unittest tests.test_stress -v 2>&1 | tail -40
+        run: python -m unittest tests.test_stress -v 2>&1 | tail -50
