@@ -64,7 +64,27 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/state":
             _json_response(self, 200, get_brain().state())
         elif parsed.path == "/health":
-            _json_response(self, 200, {"ok": True})
+            _json_response(self, 200, {"ok": True, "service": "NSM", "port": 8081})
+        elif parsed.path == "/debug":
+            import os as _os
+            from src import database as _db
+            data_dir = _os.environ.get("NSM_DATA_DIR", "NOT SET")
+            db_exists = _os.path.exists(_db.DB_PATH) if hasattr(_db, 'DB_PATH') else False
+            crash_log = ""
+            crash_path = _os.path.join(data_dir, "crash.log") if data_dir != "NOT SET" else None
+            if crash_path and _os.path.exists(crash_path):
+                try:
+                    with open(crash_path) as f:
+                        crash_log = f.read()[-1000:]
+                except Exception:
+                    pass
+            _json_response(self, 200, {
+                "data_dir": data_dir,
+                "db_path": getattr(_db, 'DB_PATH', 'UNKNOWN'),
+                "db_exists": db_exists,
+                "crash_log": crash_log or "No crash log",
+                "cwd": _os.getcwd(),
+            })
         else:
             handler_404(self)
 
