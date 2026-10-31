@@ -292,8 +292,8 @@ class Brain:
             
         target = q[-1]
         if target in self.definitions:
-            resp = f"{target} means: {self.definitions[target]}"
-            return resp.replace(" my ", " your ").replace(" me ", " you ").replace(" I ", " you ")
+            resp = swap_pronouns(self.definitions[target])
+            return resp
         if self.relations.get("IS", target):
             return f"I know {target} is related to {', '.join(self.relations.get('IS', target))}."
         return None
