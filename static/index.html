@@ -732,7 +732,7 @@
       } else {
         statusBox.style.background = '#8b2e2e';
         statusBox.style.color = 'white';
-        textSpan.innerHTML = '❌ All failed:<br>' + errors.join('<br>');
+        textSpan.innerHTML = '❌ Import failed:<br>' + (errors.length > 0 ? errors.join('<br>') : 'Unknown error');
       }
     }
     event.target.value = '';
