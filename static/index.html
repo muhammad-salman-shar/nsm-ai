@@ -167,6 +167,7 @@
       <span>NSM VB</span>
     </div>
     <div class="header-actions" style="position: relative;">
+      <button id="auto-tts-btn" onclick="toggleAutoTTS()" style="color: var(--text-dim);"><svg class="svg-icon"><use href="#i-volume"/></svg></button>
       <button onclick="startNewChat()"><svg class="svg-icon"><use href="#i-plus"/></svg></button>
       <button onclick="toggleMenu(event)"><svg class="svg-icon"><use href="#i-more"/></svg></button>
       <div id="header-menu" class="dropdown-menu">
@@ -301,6 +302,7 @@
 
       <!-- Saved Brains List -->
       <label style="margin-top: 16px; display: block; font-size: 13px; color: var(--text-dim); font-weight: 500;">SAVED BRAINS</label>
+      <input type="text" id="brain-search" placeholder="Search brains..." oninput="loadBrainsList(this.value)" style="width: 100%; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; margin-top: 6px; margin-bottom: 8px; font-size: 13px;">
       <div id="brains-list" style="margin-top: 8px; max-height: 200px; overflow-y: auto;">
         <div style="color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px;">Loading...</div>
       </div>
@@ -321,7 +323,7 @@
 <script>
   let currentChatId = Date.now().toString();
   let chats = JSON.parse(localStorage.getItem('nsm_chats') || '{}');
-  let settings = JSON.parse(localStorage.getItem('nsm_settings') || '{"user": "default", "theme": "system", "pinEnabled": "off"}');
+  let settings = JSON.parse(localStorage.getItem('nsm_settings') || '{"user": "default", "theme": "system", "pinEnabled": "off", "autoTTS": false}');
   
   let currentController = null;
   let isGenerating = false;
@@ -334,8 +336,23 @@
     setTimeout(() => toast.remove(), 2000);
   }
 
+  function toggleAutoTTS() {
+    settings.autoTTS = !settings.autoTTS;
+    localStorage.setItem('nsm_settings', JSON.stringify(settings));
+    updateTTSButton();
+    showToast(settings.autoTTS ? "Auto Read Aloud: ON" : "Auto Read Aloud: OFF");
+  }
+
+  function updateTTSButton() {
+    const btn = document.getElementById('auto-tts-btn');
+    if (btn) {
+      btn.style.color = settings.autoTTS ? 'var(--accent)' : 'var(--text-dim)';
+    }
+  }
+
   function init() {
     applyTheme(settings.theme || 'system');
+    updateTTSButton();
     document.getElementById('settings-theme').value = settings.theme || 'system';
     document.getElementById('settings-user').value = settings.user || "default";
     document.getElementById('settings-url').value = settings.url || "";
@@ -632,6 +649,10 @@
       chat.messages.push({ sender: 'nsm', text: data.response });
       localStorage.setItem('nsm_chats', JSON.stringify(chats));
       renderChat(currentChatId);
+      
+      if (settings.autoTTS) {
+        speakText(data.response, null);
+      }
     } catch (err) {
       if (container.contains(typing)) container.removeChild(typing);
       let errorMsg = "Error connecting to brain.";
@@ -651,7 +672,7 @@
   function stopGeneration() { if (currentController) currentController.abort(); }
 
   // ===== BRAIN MANAGER FUNCTIONS (added later) =====
-  async function loadBrainsList() {
+  async function loadBrainsList(query = '') {
     const list = document.getElementById('brains-list');
     const activeName = document.getElementById('active-brain-name');
     if (!list) return;
@@ -660,10 +681,14 @@
     try {
       const res = await fetch('/brains');
       const data = await res.json();
-      const brains = data.brains || [];
+      let brains = data.brains || [];
+      
+      if (query) {
+        brains = brains.filter(b => b.toLowerCase().includes(query.toLowerCase()));
+      }
       
       if (brains.length === 0) {
-        list.innerHTML = '<div style="color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px;">No brains saved yet</div>';
+        list.innerHTML = '<div style="color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px;">No brains found</div>';
         return;
       }
       
@@ -716,14 +741,16 @@
     if(!files || files.length === 0) return;
     
     const statusBox = document.getElementById('import-status');
+    const textSpan = document.getElementById('import-status-text');
     if (statusBox) {
       statusBox.style.display = 'block';
       statusBox.style.background = 'var(--surface2)';
       statusBox.style.color = 'var(--text)';
-      statusBox.innerText = 'Importing ' + files.length + ' file(s)...';
+      textSpan.innerText = 'Importing ' + files.length + ' file(s)...';
     }
 
     let successCount = 0, failCount = 0, errors = [];
+    let lastImportedBrain = "";
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -733,15 +760,20 @@
         reader.readAsText(file);
       });
       
+      // Create a new brain ID based on the filename
+      let brainName = file.name.replace('.json', '').replace('NSM_Brain_', '').replace('NSM_Memory_', '');
+      if (!brainName) brainName = "imported_brain_" + Date.now();
+
       try {
         const brainData = JSON.parse(fileData);
         const res = await fetch('/import', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ user_id: settings.user, brain_data: brainData, mode: 'merge' })
+          body: JSON.stringify({ user_id: brainName, brain_data: brainData, mode: 'replace' })
         });
         const result = await res.json();
         if (result.ok) {
           successCount++;
+          lastImportedBrain = brainName;
         } else {
           failCount++;
           errors.push(file.name + ': ' + (result.error || 'Unknown'));
@@ -753,11 +785,17 @@
     }
 
     if (statusBox) {
-      const textSpan = document.getElementById('import-status-text');
       if (successCount > 0) {
         statusBox.style.background = '#238636';
         statusBox.style.color = 'white';
-        textSpan.innerHTML = '✅ Success! Brain memory updated. You can close this.';
+        textSpan.innerHTML = '✅ Imported ' + successCount + ' file(s)!<br><small>Brain created: ' + lastImportedBrain + '</small>';
+        
+        // Auto-switch to the last imported brain
+        settings.user = lastImportedBrain;
+        localStorage.setItem('nsm_settings', JSON.stringify(settings));
+        document.getElementById('active-brain-name').innerText = lastImportedBrain;
+        document.getElementById('settings-user').value = lastImportedBrain;
+        
         setTimeout(() => loadBrainsList(), 500);
       } else {
         statusBox.style.background = '#8b2e2e';
