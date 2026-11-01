@@ -68,6 +68,7 @@ _COMMON_VERBS = {
     "cry","cried","smile","smiled","hope","hoped",
     "wish","wished","decide","decided","explain","explained",
     "means","mean","meaning","meant","known",
+    "define","described","describe","explain",
     "actually","wrong","correction","instead","alright",
 }
 
@@ -186,6 +187,35 @@ class Brain:
         self.auto_save_path = auto_save_path
         if auto_save_path:
             persistence.load(self, auto_save_path)
+        self._seed_self_knowledge()
+
+    def _seed_self_knowledge(self):
+        """Injects built-in knowledge about NeuraSaMu and NSM."""
+        self.definitions["nsm"] = "NSM (NeuraSaMu Virtual Brain) is a neuro-symbolic AI that learns offline on your device. Built by NeuraSaMu."
+        self.definitions["nsm vb"] = "NSM VB is a local-first cognitive architecture by NeuraSaMu. It is a virtual brain that learns from conversation."
+        self.definitions["neurasamu"] = "NeuraSaMu is an AI research and development venture founded by Muhammad Salman Shar in September 2023, dedicated to building autonomous cognitive architectures and functional AGI."
+        self.definitions["muhammad salman"] = "Muhammad Salman Shar (also known as Akira), born May 25, 2007, is an AI Scientist, Theoretical Visionary, Polymath, and CEO/Founder of NeuraSaMu from Khairpur, Sindh, Pakistan."
+        self.definitions["akira"] = self.definitions["muhammad salman"]
+        self.definitions["salman"] = self.definitions["muhammad salman"]
+        
+        self.relations.add("BUILT_BY", "nsm", "neurasamu")
+        self.relations.add("FOUNDED_BY", "neurasamu", "muhammad salman")
+        self.relations.add("FOUNDED_BY", "neurasamu", "salman")
+        self.relations.add("IS", "neurasamu", "company")
+        self.relations.add("IS", "nsm", "ai")
+
+    def _extract_target_from_question(self, q):
+        """Extracts the target entity from a question, checking up to 3-grams."""
+        qw = {"what", "whats", "who", "whos", "where", "wheres", "tell", "me", "about", "define", "explain", "is", "are", "the", "a", "an", "of", "does", "do", "mean", "meaning", "know", "you", "can", "could", "would", "should"}
+        content = [w for w in q if w not in qw]
+        if not content:
+            return None
+        for n in range(min(3, len(content)), 0, -1):
+            for i in range(len(content) - n + 1):
+                phrase = " ".join(content[i:i+n])
+                if phrase in self.definitions or phrase in self.fact_store.facts or any(s == phrase for (_, s) in self.relations.relations.keys()):
+                    return phrase
+        return content[-1]
 
     def _boot_perceptron(self, path):
         try:
@@ -263,8 +293,17 @@ class Brain:
     def _auto_vocab(self, text):
         """Silently adds unknown non-stopword words to lexicon. Returns genuinely new words."""
         new_words = []
+        # Pre-compute words that are parts of multi-word definition keys
+        known_terms = set()
+        for key in self.definitions:
+            for w in key.split():
+                known_terms.add(w)
         for w in _words(text):
             if w in STOPWORDS or len(w) < 3:
+                continue
+            if w in self.definitions or w in self.fact_store.facts:
+                continue
+            if w in known_terms:
                 continue
             if self.lexicon.has(w):
                 continue
@@ -292,21 +331,26 @@ class Brain:
 
     def _lookup_definition(self, text):
         q = _words(text)
-        if not any(w in ("what","whats","who","tell","explain","define") for w in q):
+        t_low = text.lower().strip()
+        def_triggers = ("what is", "whats", "who is", "whos", "tell me about", "define", "explain", "what does", "what do", "meaning of")
+        is_def_q = any(t_low.startswith(w) for w in def_triggers)
+        if not q or (not is_def_q and "?" not in text):
             return None
         
         # Don't hijack SVO queries like "what does salman eat"
         if parse_query(text) is not None:
             return None
             
-        target = q[-1]
+        target = self._extract_target_from_question(q) or q[-1]
         if target in {"you", "he", "she", "it", "they", "them"}:
             return None
         if target in self.definitions:
             resp = swap_pronouns(self.definitions[target])
             return resp
+        if target in self.fact_store.facts:
+            return f"{target.capitalize()} is {self.fact_store.facts[target]}."
         if self.relations.get("IS", target):
-            return f"I know {target} is related to {', '.join(self.relations.get('IS', target))}."
+            return f"{target.capitalize()} is related to {', '.join(self.relations.get('IS', target))}."
         return None
 
     def _generate(self, intent, conf, text, recall):
