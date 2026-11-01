@@ -95,7 +95,7 @@ class EpisodicMemory:
     def __init__(self):
         self.episodes = []
 
-    def store(self, text, mood, response, binding_strength=1.0):
+    def store(self, text, mood, response, binding_strength=1.0, feedback=None):
         words = [w for w in text.lower().split() if w]
         vec = bundle([_vec(w) for w in words]) if words else np.zeros(DIM, dtype=np.uint8)
         ep = {
@@ -106,6 +106,7 @@ class EpisodicMemory:
             "strength": float(binding_strength),
             "vec": vec,
             "words": list(words),
+            "feedback": feedback,
         }
         self.episodes.append(ep)
         return ep
@@ -119,6 +120,8 @@ class EpisodicMemory:
         q_vec = bundle([_vec(w) for w in q_words])
         scored = []
         for ep in self.episodes:
+            if ep.get("feedback") == "rejected":
+                continue
             ep_words = set(ep["words"])
             hdc = similarity(ep["vec"], q_vec)
             overlap = len(ep_words & q_words) / max(len(q_words), 1)

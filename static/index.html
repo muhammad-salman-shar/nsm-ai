@@ -457,6 +457,20 @@
   let currentSpeechText = null;
 
   function speakText(text, btn) {
+    // Use Native Android TTS if available
+    if (window.Android && typeof window.Android.speakText === 'function') {
+      if (btn.innerText === '⏸️' || btn.innerHTML.includes('i-play')) {
+         // If already playing/paused, stop it
+         window.Android.stopTTS();
+         btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
+      } else {
+         window.Android.speakText(text);
+         btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
+      }
+      return;
+    }
+    
+    // Fallback for Browser
     if (!('speechSynthesis' in window)) { showToast("TTS not supported"); return; }
 
     // If clicking the same text that is currently speaking/paused
@@ -788,17 +802,25 @@
       
       const data = await res.json();
       const jsonStr = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonStr], {type: "application/json"});
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url; 
-      a.download = `NSM_Memory_${settings.user}.json`;
-      document.body.appendChild(a);
-      a.click(); 
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast("Exported successfully!");
+      const fileName = `NSM_Memory_${settings.user}.json`;
+
+      // Use Native Android Share if available
+      if (window.Android && typeof window.Android.shareBrain === 'function') {
+        window.Android.shareBrain(jsonStr, fileName);
+        showToast("Opening Share Menu...");
+      } else {
+        // Fallback for Browser
+        const blob = new Blob([jsonStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; 
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click(); 
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("Exported successfully!");
+      }
     } catch(e) { 
       showToast("Export failed: " + e.message); 
     }

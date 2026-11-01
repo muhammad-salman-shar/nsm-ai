@@ -63,8 +63,30 @@ class Handler(BaseHTTPRequestHandler):
             _html_response(self, os.path.join(STATIC_DIR, "index.html"))
         elif parsed.path == "/state":
             _json_response(self, 200, get_brain().state())
+        elif parsed.path == "/brains":
+            _json_response(self, 200, {"brains": database.list_brains()})
         elif parsed.path == "/health":
-            _json_response(self, 200, {"ok": True})
+            _json_response(self, 200, {"ok": True, "service": "NSM", "port": 8081})
+        elif parsed.path == "/debug":
+            import os as _os
+            from src import database as _db
+            data_dir = _os.environ.get("NSM_DATA_DIR", "NOT SET")
+            db_exists = _os.path.exists(_db.DB_PATH) if hasattr(_db, 'DB_PATH') else False
+            crash_log = ""
+            crash_path = _os.path.join(data_dir, "crash.log") if data_dir != "NOT SET" else None
+            if crash_path and _os.path.exists(crash_path):
+                try:
+                    with open(crash_path) as f:
+                        crash_log = f.read()[-1000:]
+                except Exception:
+                    pass
+            _json_response(self, 200, {
+                "data_dir": data_dir,
+                "db_path": getattr(_db, 'DB_PATH', 'UNKNOWN'),
+                "db_exists": db_exists,
+                "crash_log": crash_log or "No crash log",
+                "cwd": _os.getcwd(),
+            })
         else:
             handler_404(self)
 
@@ -92,8 +114,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             
             user_id = data.get("user_id", "default")
+            llm_url = data.get("llm_url")
+            llm_model = data.get("llm_model")
+            llm_key = data.get("llm_key")
+            
             brain = get_brain(user_id)
-            result = brain.observe_bulk(text)
+            result = brain.observe_bulk(text, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
             database.save_brain(user_id, persistence.to_dict(brain))
             response_text = result["response"]
             
@@ -141,16 +167,52 @@ class Handler(BaseHTTPRequestHandler):
             }
             _json_response(self, 200, openai_resp)
 
+        elif parsed.path == "/export":
+            user_id = data.get("user_id", "default")
+            brain = get_brain(user_id)
+            _json_response(self, 200, persistence.to_dict(brain))
+            return
+
+        elif parsed.path == "/import":
+            user_id = data.get("user_id", "default")
+            import_data = data.get("brain_data")
+            mode = data.get("mode", "merge")
+            if not import_data:
+                _json_response(self, 400, {"error": "No data provided"})
+                return
+            valid, reason = persistence.validate_brain_file(import_data)
+            if not valid:
+                _json_response(self, 400, {"error": f"Invalid NSM file: {reason}"})
+                return
+            current_state = database.load_brain(user_id)
+            final_state = persistence.merge_brain_data(current_state, import_data) if mode == "merge" and current_state else import_data
+            brain = Brain(auto_save_path=None)
+            persistence.from_dict(brain, final_state)
+            database.save_brain(user_id, persistence.to_dict(brain))
+            if user_id in _brain_cache: del _brain_cache[user_id]
+            _json_response(self, 200, {"ok": True})
+            return
+
         elif parsed.path == "/chat":
             text = (data.get("text") or "").strip()
             if not text:
                 _json_response(self, 400, {"error": "empty text"})
                 return
             user_id = data.get("user_id", "default")
+            llm_url = data.get("llm_url")
+            llm_model = data.get("llm_model")
+            llm_key = data.get("llm_key")
+            
             brain = get_brain(user_id)
-            result = brain.observe_bulk(text)
+            result = brain.observe_bulk(text, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
             database.save_brain(user_id, persistence.to_dict(brain))
             _json_response(self, 200, result)
+        elif parsed.path == "/delete_brain":
+            user_id = data.get("user_id", "default")
+            database.delete_brain(user_id)
+            if user_id in _brain_cache:
+                del _brain_cache[user_id]
+            _json_response(self, 200, {"ok": True, "message": f"Deleted brain: {user_id}"})
         elif parsed.path == "/reset":
             user_id = data.get("user_id", "default")
             database.delete_brain(user_id)
@@ -166,7 +228,8 @@ def handler_404(handler):
 
 
 def run(host="0.0.0.0", port=8081):
-    os.makedirs(STATIC_DIR, exist_ok=True)
+    # Note: In Android APK, the static folder is read-only.
+    # We don't need to create it, it's bundled with the app.
     server = HTTPServer((host, port), Handler)
     print(f"NSM VB server on http://{host}:{port}")
     print(f"Open in browser: http://localhost:{port}")

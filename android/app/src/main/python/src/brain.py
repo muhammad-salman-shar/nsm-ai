@@ -15,6 +15,7 @@ from src.parser_v2 import parse_to_meaning
 from src.realizer import realize, get_article
 from src.llm_teacher import improve_language
 from src.patterns import is_svo_verb
+from src.morphology import conjugate_verb, swap_pronouns
 
 MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
               "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
@@ -71,7 +72,7 @@ _COMMON_VERBS = {
 }
 
 _QUESTION_STARTERS = {
-    "what","who","where","when","why","how","which","whose",
+    "what","whats","who","whos","where","wheres","when","whens","why","whys","how","hows","which","whose",
     "tell","explain","define",
     "do","does","did","can","could","will","would","should",
     "is","are","was","were","have","has","had","may","might","must",
@@ -172,6 +173,7 @@ class Brain:
         self.definitions = {}
         self.ask_depth = 0
         self.asked_words = set()
+        self.pending_feedback = None
         self.auto_save_path = auto_save_path
         if auto_save_path:
             persistence.load(self, auto_save_path)
@@ -248,6 +250,21 @@ class Brain:
         unknown.sort(key=lambda w: -len(w))
         return unknown
 
+
+    def _auto_vocab(self, text):
+        """Silently adds unknown non-stopword words to lexicon. Returns genuinely new words."""
+        new_words = []
+        for w in _words(text):
+            if w in STOPWORDS or len(w) < 3:
+                continue
+            if self.lexicon.has(w):
+                continue
+            if w.endswith("s") and (self.lexicon.has(w[:-1]) or self.lexicon.has(w[:-2])):
+                continue
+            self.lexicon.see(w)
+            new_words.append(w)
+        return new_words
+
     def _attend(self, words):
         known = sum(1 for w in words if self.lexicon.has(w))
         ratio = known / max(len(words), 1)
@@ -266,7 +283,7 @@ class Brain:
 
     def _lookup_definition(self, text):
         q = _words(text)
-        if not any(w in ("what","who","tell","explain","define") for w in q):
+        if not any(w in ("what","whats","who","tell","explain","define") for w in q):
             return None
         
         # Don't hijack SVO queries like "what does salman eat"
@@ -275,7 +292,8 @@ class Brain:
             
         target = q[-1]
         if target in self.definitions:
-            return f"{target} means: {self.definitions[target]}"
+            resp = swap_pronouns(self.definitions[target])
+            return resp
         if self.relations.get("IS", target):
             return f"I know {target} is related to {', '.join(self.relations.get('IS', target))}."
         return None
@@ -375,9 +393,10 @@ class Brain:
                     past_clean = past_clean[0].upper() + past_clean[1:]
                 
                 # If user is asking a question, confirm it. If statement, just recall.
+                past_swapped = swap_pronouns(past_clean)
                 if _is_question_text(text):
-                    return f"Yes, you told me earlier: \"{past_clean}\""
-                return f"I remember you said: \"{past_clean}\"."
+                    return f"Yes, you told me earlier: \"{past_swapped}\""
+                return f"I remember you said: \"{past_swapped}\"."
         return self.lang.generate(intent, self.personality, self.affect)
 
     def _reset_chain(self):
@@ -386,7 +405,7 @@ class Brain:
 
     def _try_learn_relation(self, text):
         # Do not learn from questions! Only statements.
-        if _is_question_text(text) or text.strip().endswith("?"):
+        if _is_question_text(text) or text.strip().endswith("?") or text.lower().startswith(("what ", "whats ", "who ", "whos ", "where ", "wheres ", "when ", "whens ", "why ", "whys ", "how ", "hows ")):
             return None
             
         words = _words(text)
@@ -478,6 +497,8 @@ class Brain:
                 "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
                 "response": response,
             }
+        new_words = self._auto_vocab(text)
+
         words, intent, conf = self._perceive(text)
         self._attend(words)
         lookup = self._lookup_definition(text)
@@ -583,7 +604,7 @@ class Brain:
             "response": response, "defined": label,
         }
 
-    def observe(self, text):
+    def observe(self, text, llm_url=None, llm_model=None, llm_key=None):
         self.turn += 1
         result = self._observe_inner(text)
         
@@ -591,7 +612,7 @@ class Brain:
         if result and result.get("response"):
             raw_thought = result["response"]
             result["raw_thought"] = raw_thought
-            result["response"] = improve_language(raw_thought, text)
+            result["response"] = improve_language(raw_thought, text, llm_url, llm_model, llm_key)
             
         self._maybe_save()
         return result
@@ -631,6 +652,45 @@ class Brain:
         # Priority 3: random from bank
         import random
         return random.choice(self.ASK_BANK)
+
+    def _try_feedback(self, text):
+        """Detects user corrections and marks previous response as rejected."""
+        try:
+            t_low = text.lower().strip()
+            if not self.episodic.episodes:
+                return None
+        except Exception:
+            return None
+        
+        # Find last valid episode (skip if already feedback prompt)
+        last_ep = self.episodic.episodes[-1]
+        if last_ep.get("feedback") == "rejected":
+            return None
+        
+        # Guard: if NSM's last response was a question, user's "no" is answer, not correction
+        last_response = last_ep.get("response", "")
+        if last_response.rstrip().endswith("?"):
+            return None
+        
+        # Case 1: Pure correction signal (whole message)
+        if t_low.strip(".,!?") in ("wrong", "incorrect", "nope", "thats wrong", "that's wrong"):
+            last_ep["feedback"] = "rejected"
+            self.pending_feedback = last_ep["text"]
+            return f"Sorry! What should I have said for '{last_ep['text']}'?"
+        
+        # Case 2: Inline correction "no, [answer]" / "actually [answer]" / "wrong, [answer]"
+        for marker in ("no,", "wrong,", "incorrect,", "actually,", "actually ", "no ", "wrong "):
+            if t_low.startswith(marker):
+                correct = text[len(marker):].strip()
+                if not correct:
+                    continue
+                last_ep["feedback"] = "rejected"
+                self.pending_feedback = None
+                self.episodic.store(last_ep["text"], self.affect.mood(), correct, 1.0, feedback="accepted")
+                self.affect.event("rewarded", intensity=0.8)
+                return f"Got it! I'll remember: '{correct}' for '{last_ep['text']}'"
+        
+        return None
 
     def _try_remember(self, text):
         m = re.match(r"^remember(?:\s+this|\s+that)?[:,]?\s+(.*)", text, re.IGNORECASE)
@@ -690,6 +750,22 @@ class Brain:
         return f"Got it. I forgot everything about '{target}'."
 
     def _observe_inner(self, text):
+        # L14: Pending Feedback Resolution (User is teaching correction)
+        if self.pending_feedback:
+            original_question = self.pending_feedback
+            correct_answer = text.strip()
+            self.pending_feedback = None
+            self.episodic.store(original_question, self.affect.mood(), correct_answer, 1.0, feedback="accepted")
+            self.affect.event("rewarded", intensity=1.0)
+            self.affect.tick()
+            return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it! For '{original_question}' I will say: '{correct_answer}'"}
+
+        # L14: Feedback Detection (Correction signals)
+        feedback_resp = self._try_feedback(text)
+        if feedback_resp:
+            self.affect.tick()
+            return {"turn": self.turn, "text": text, "intent": "correction", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": feedback_resp}
+
         # L9: Remember System (Highest Priority)
         remember_resp = self._try_remember(text)
         if remember_resp:
@@ -725,6 +801,32 @@ class Brain:
                 "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
                 "response": ask_resp,
             }
+
+        # L4 Grammar Monster Queries (WH, Yes/No, Negation)
+        meaning = parse_to_meaning(text)
+        if meaning:
+            if meaning[0] == "SVO_QUERY":
+                subj, verb = meaning[1], meaning[2]
+                objs = self.relations.get(verb.upper(), subj)
+                if objs:
+                    v = conjugate_verb(verb, "present", subj)
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"{subj.capitalize()} {v} {objs[0]}."}
+                return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"I don't know what {subj} {conjugate_verb(verb, 'present', subj)}."}
+
+            elif meaning[0] == "SVO_YESNO":
+                subj, verb = meaning[1], meaning[2]
+                obj = meaning[3] if len(meaning) > 3 else None
+                objs = self.relations.get(verb.upper(), subj)
+                if obj and obj in objs:
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Yes, {subj} {conjugate_verb(verb, 'present', subj)} {obj}."}
+                elif obj:
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"No, {subj} does not {verb} {obj}."}
+                else:
+                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"I'm not sure."}
+
+            elif meaning[0] == "NOT_SVO":
+                subj, verb, obj = meaning[1], meaning[2], meaning[3]
+                return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it. I will remember that {subj} does not {verb} {obj}."}
 
         if self.pending and _is_question_text(text):
             self.pending = None
@@ -795,8 +897,11 @@ class Brain:
         self._attend(words)
         recall = self.episodic.recall(text, top_k=1)
 
+        # L13: Auto-vocabulary (silently learn new words first)
+        new_words = self._auto_vocab(text)
+        
         if parse_query(text) is None:
-            unknown = self._find_unknown(words)
+            unknown = new_words
         else:
             unknown = []
         if unknown and self.ask_depth < self.max_depth:
@@ -844,16 +949,16 @@ class Brain:
             except OSError:
                 pass
 
-    def observe_bulk(self, text):
+    def observe_bulk(self, text, llm_url=None, llm_model=None, llm_key=None):
         from src.text_utils import split_sentences
         sentences = split_sentences(text)
         
         if len(sentences) <= 1:
-            return self.observe(text)
+            return self.observe(text, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
             
         last_result = None
         for s in sentences:
-            last_result = self.observe(s)
+            last_result = self.observe(s, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
             
         return {
             "turn": self.turn,

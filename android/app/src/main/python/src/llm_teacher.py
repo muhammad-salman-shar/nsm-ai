@@ -1,4 +1,5 @@
 import urllib.request
+import urllib.error
 import json
 import os
 
@@ -14,10 +15,12 @@ RULES:
 3. If raw thought says "I don't know", just say it in a friendly way.
 Output ONLY the rewritten sentence, nothing else."""
 
-def improve_language(raw_text, user_input=""):
-    url = os.environ.get("NSM_LLM_URL", DEFAULT_URL)
-    model = os.environ.get("NSM_LLM_MODEL", DEFAULT_MODEL)
-    api_key = os.environ.get("NSM_LLM_KEY", "")
+def improve_language(raw_text, user_input="", llm_url=None, llm_model=None, llm_key=None):
+    url = llm_url or os.environ.get("NSM_LLM_URL", DEFAULT_URL)
+    if url and not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
+    model = llm_model or os.environ.get("NSM_LLM_MODEL", DEFAULT_MODEL)
+    api_key = llm_key or os.environ.get("NSM_LLM_KEY", "")
 
     if url == DEFAULT_URL and not api_key:
         return raw_text
@@ -63,3 +66,42 @@ def improve_language(raw_text, user_input=""):
     except Exception as e:
         print(f"[LLM Teacher Error] {e}")
         return raw_text
+
+
+def test_llm_connection(llm_url, llm_model, llm_key=None):
+    """Test the LLM connection and return detailed diagnostics."""
+    if not llm_url:
+        return {"ok": False, "error": "URL is empty"}
+    if not llm_model:
+        return {"ok": False, "error": "Model name is empty"}
+        
+    # Auto-fix URL
+    if llm_url.endswith("/v1"):
+        llm_url += "/chat/completions"
+    elif not llm_url.endswith("/chat/completions"):
+        llm_url = llm_url.rstrip("/") + "/chat/completions"
+    
+    messages = [{"role": "user", "content": "Say OK"}]
+    data = {"model": llm_model, "messages": messages, "max_tokens": 10, "stream": False}
+    headers = {"Content-Type": "application/json"}
+    if llm_key:
+        headers["Authorization"] = f"Bearer {llm_key}"
+    
+    try:
+        req = urllib.request.Request(llm_url, data=json.dumps(data).encode(), headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as response:
+            raw = response.read().decode()
+            result = json.loads(raw)
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            return {"ok": True, "response": content, "status_code": response.status}
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode()[:300]
+        except Exception:
+            pass
+        return {"ok": False, "error": f"HTTP {e.code}: {e.reason}", "details": body}
+    except urllib.error.URLError as e:
+        return {"ok": False, "error": f"URL Error: {str(e.reason)}"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)}"}
