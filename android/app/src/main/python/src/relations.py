@@ -103,6 +103,7 @@ class RelationStore:
             bucket[obj] = {"count": 1, "first_seen": now, "last_seen": now,
                            "superseded": False, "source": "user"}
         else:
+            if "count" not in bucket[obj]: bucket[obj]["count"] = 0
             bucket[obj]["count"] += 1
             bucket[obj]["last_seen"] = now
             bucket[obj]["superseded"] = False

@@ -6,3 +6,6 @@ logs/
 *.npz
 tunnel.log
 data/dictionary.json
+data/nsm_core.db
+data/brain_state.json
+NSM_Brain_Salman.json

@@ -13,7 +13,7 @@ def _serialize_relations(relations):
         key = f"{rel_type}|{subject}"
         out[key] = {
             obj: {
-                "count": rec["count"],
+                "count": rec.get("count", 1),
                 "first_seen": rec["first_seen"],
                 "last_seen": rec["last_seen"],
                 "superseded": rec["superseded"],
@@ -25,16 +25,19 @@ def _serialize_relations(relations):
 
 
 def _deserialize_relations(data, relations):
+    import time
     for key, bucket in data.items():
+        if "|" not in key: continue
         rel_type, subject = key.split("|", 1)
         store_key = (rel_type, subject)
         relations.relations[store_key] = {}
         for obj, rec in bucket.items():
+            if not isinstance(rec, dict): rec = {}
             relations.relations[store_key][obj] = {
-                "count": rec["count"],
-                "first_seen": rec["first_seen"],
-                "last_seen": rec["last_seen"],
-                "superseded": rec["superseded"],
+                "count": rec.get("count", 1),
+                "first_seen": rec.get("first_seen", time.time()),
+                "last_seen": rec.get("last_seen", time.time()),
+                "superseded": rec.get("superseded", False),
                 "source": rec.get("source", "user"),
             }
 
@@ -51,6 +54,7 @@ def _serialize_lexicon(lexicon):
 
 def _deserialize_lexicon(data, lexicon):
     for word, d in data.items():
+        if not isinstance(d, dict): d = {}
         existing = lexicon.words.get(word)
         vec = existing["vec"] if existing and existing.get("vec") is not None else _safe_vec(word)
         lexicon.words[word] = {
@@ -59,7 +63,7 @@ def _deserialize_lexicon(data, lexicon):
             "contexts": set(d.get("contexts", [])),
             "relations": {},
         }
-    lexicon.count = sum(d["count"] for d in lexicon.words.values())
+    lexicon.count = sum(d.get("count", 1) for d in lexicon.words.values())
 
 
 def _safe_vec(word):
