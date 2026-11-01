@@ -362,7 +362,18 @@
     document.getElementById('settings-pin').value = settings.pin || "";
     
     if (settings.pinEnabled === 'on' && settings.pin) document.getElementById('pin-screen').style.display = 'flex';
-    if (!chats[currentChatId]) chats[currentChatId] = { title: "New Chat", messages: [] };
+    const chatIds = Object.keys(chats);
+    if (chatIds.length > 0) {
+        chatIds.sort((a, b) => {
+            const timeA = chats[a].updated_at || parseInt(a);
+            const timeB = chats[b].updated_at || parseInt(b);
+            return timeB - timeA;
+        });
+        currentChatId = chatIds[0];
+    } else {
+        currentChatId = Date.now().toString();
+        chats[currentChatId] = { title: "New Chat", messages: [], updated_at: Date.now() };
+    }
     
     renderChat(currentChatId);
     loadChatList();
@@ -425,7 +436,7 @@
     });
   }
   function switchChat(id) { currentChatId = id; renderChat(id); closeSidebar(); }
-  function startNewChat() { currentChatId = Date.now().toString(); chats[currentChatId] = { title: "New Chat", messages: [] }; localStorage.setItem('nsm_chats', JSON.stringify(chats)); renderChat(currentChatId); loadChatList(); }
+  function startNewChat() { currentChatId = Date.now().toString(); chats[currentChatId] = { title: "New Chat", messages: [], updated_at: Date.now() }; localStorage.setItem('nsm_chats', JSON.stringify(chats)); renderChat(currentChatId); loadChatList(); }
 
   function renderChat(id) {
     const container = document.getElementById('chat-container');
@@ -618,6 +629,7 @@
     if(!text) return;
     const chat = chats[currentChatId];
     if (chat.messages.length === 0) chat.title = text.substring(0, 20);
+    chat.updated_at = Date.now();
     chat.messages.push({ sender: 'user', text: text });
     localStorage.setItem('nsm_chats', JSON.stringify(chats));
     renderChat(currentChatId);

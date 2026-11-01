@@ -147,9 +147,17 @@ def _to_int(tok):
     return int(tok) if tok.isdigit() else MATH_WORDS.get(tok)
 
 
+WH_WORDS = {"what","whats","who","whos","where","wheres","when","whens","why","whys","how","hows","which","whose"}
 def _is_question_text(text):
     words = _words(text)
-    return bool(words) and words[0] in _QUESTION_STARTERS
+    if not words: return False
+    if text.strip().endswith("?"): return True
+    if words[0] in _QUESTION_STARTERS: return True
+    has_wh = any(w in WH_WORDS for w in words)
+    has_aux = any(w in AUX_VERBS or w in ("do", "does", "did") for w in words)
+    if has_wh and has_aux and words[0] != "i":
+        return True
+    return False
 
 
 class Brain:
@@ -292,6 +300,8 @@ class Brain:
             return None
             
         target = q[-1]
+        if target in {"you", "he", "she", "it", "they", "them"}:
+            return None
         if target in self.definitions:
             resp = swap_pronouns(self.definitions[target])
             return resp
@@ -457,6 +467,8 @@ class Brain:
             return None
             
         subject = pre[-1]
+        if subject in {"you", "he", "she", "it", "they", "them"}:
+            return None
         if len(subject) < 3:
             return None
 
@@ -748,7 +760,21 @@ class Brain:
         for k in keys_to_del:
             del self.relations.relations[k]
             
-        return f"Got it. I forgot everything about '{target}'."
+        # 4. Forget Episodes (mark rejected so recall skips them)
+        ep_count = 0
+        for ep in self.episodic.episodes:
+            if target in ep.get("text", "").lower():
+                ep["feedback"] = "rejected"
+                ep_count += 1
+                
+        # 5. Forget QA pairs (mark rejected)
+        qa_count = 0
+        for qa in self.qa_pairs:
+            if target in qa.get("pattern", "").lower() or target in qa.get("answer", "").lower():
+                qa["rejected"] = True
+                qa_count += 1
+
+        return f"Got it. I forgot everything about '{target}' (episodes: {ep_count}, qa: {qa_count})."
 
     def _try_teach_qa(self, text):
         """Detects 'when I say X, reply Y' patterns and stores them."""
@@ -756,7 +782,15 @@ class Brain:
         if not t:
             return None
         lower = t.lower()
-        prefixes = ["when i say ", "when i ask ", "if i say ", "if i ask "]
+        prefixes = [
+            "when i say ", "when i ask ", "if i say ", "if i ask ",
+            "if someone ask ", "if someone asks ",
+            "when someone ask ", "when someone asks ",
+            "if a user ask ", "if a user asks ",
+            "when a user ask ", "when a user asks ",
+            "if user ask ", "if user asks ",
+            "when user ask ", "when user asks ",
+        ]
         rest = None
         for p in prefixes:
             if lower.startswith(p):
@@ -764,7 +798,12 @@ class Brain:
                 break
         if rest is None:
             return None
-        seps = [", reply ", ", answer ", ", say ", ", respond ", ", then ", ",reply ", " reply ", " answer "]
+        seps = [
+            " then say ", " then reply ", " then answer ", " then respond ",
+            " then tells them ", " then tell them ",
+            ", reply ", ", answer ", ", say ", ", respond ", ", then ",
+            ",reply ", " reply ", " answer ",
+        ]
         split_idx = -1
         sep_len = 0
         rest_lower = rest.lower()
@@ -781,7 +820,7 @@ class Brain:
             return None
         import time as _t
         self.qa_pairs.append({"pattern": pat, "answer": ans, "created": _t.time()})
-        return f"Got it! When you say '{pat}', I will reply '{ans}'."
+        return f"Got it! Rule saved: When you say '{pat}', I will reply '{ans}'."
 
     def _lookup_qa_response(self, text):
         """Returns taught answer if query word-overlap with pattern >= 0.8."""
@@ -791,6 +830,8 @@ class Brain:
         best = None
         best_score = 0.0
         for qa in self.qa_pairs:
+            if qa.get("rejected"):
+                continue
             pw = set(re.findall(r"[a-z]+", qa.get("pattern", "").lower()))
             if not pw:
                 continue
