@@ -174,6 +174,7 @@ class Brain:
         self.ask_depth = 0
         self.asked_words = set()
         self.pending_feedback = None
+        self.qa_pairs = []
         self.auto_save_path = auto_save_path
         if auto_save_path:
             persistence.load(self, auto_save_path)
@@ -749,6 +750,58 @@ class Brain:
             
         return f"Got it. I forgot everything about '{target}'."
 
+    def _try_teach_qa(self, text):
+        """Detects 'when I say X, reply Y' patterns and stores them."""
+        t = text.strip()
+        if not t:
+            return None
+        lower = t.lower()
+        prefixes = ["when i say ", "when i ask ", "if i say ", "if i ask "]
+        rest = None
+        for p in prefixes:
+            if lower.startswith(p):
+                rest = t[len(p):]
+                break
+        if rest is None:
+            return None
+        seps = [", reply ", ", answer ", ", say ", ", respond ", ", then ", ",reply ", " reply ", " answer "]
+        split_idx = -1
+        sep_len = 0
+        rest_lower = rest.lower()
+        for s in seps:
+            idx = rest_lower.find(s)
+            if idx > 0 and (split_idx == -1 or idx < split_idx):
+                split_idx = idx
+                sep_len = len(s)
+        if split_idx <= 0:
+            return None
+        pat = rest[:split_idx].strip().strip('\'"').strip()
+        ans = rest[split_idx + sep_len:].strip().strip('\'"').strip()
+        if len(pat) < 2 or len(ans) < 1:
+            return None
+        import time as _t
+        self.qa_pairs.append({"pattern": pat, "answer": ans, "created": _t.time()})
+        return f"Got it! When you say '{pat}', I will reply '{ans}'."
+
+    def _lookup_qa_response(self, text):
+        """Returns taught answer if query word-overlap with pattern >= 0.8."""
+        q_words = set(re.findall(r"[a-z]+", text.lower()))
+        if not q_words:
+            return None
+        best = None
+        best_score = 0.0
+        for qa in self.qa_pairs:
+            pw = set(re.findall(r"[a-z]+", qa.get("pattern", "").lower()))
+            if not pw:
+                continue
+            overlap = len(q_words & pw) / max(len(pw), 1)
+            if overlap > best_score:
+                best_score = overlap
+                best = qa
+        if best and best_score >= 0.8:
+            return best.get("answer")
+        return None
+
     def _observe_inner(self, text):
         # L14: Pending Feedback Resolution (User is teaching correction)
         if self.pending_feedback:
@@ -789,6 +842,26 @@ class Brain:
                 "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
                 "response": forget_resp,
             }
+
+        # NEW: Q&A teach (learn pattern)
+        qa_teach_resp = self._try_teach_qa(text)
+        if qa_teach_resp:
+            self.affect.event("rewarded", intensity=0.6)
+            self.affect.tick()
+            self.episodic.store(text, self.affect.mood(), qa_teach_resp, 1.0)
+            return {"turn": self.turn, "text": text, "intent": "statement",
+                    "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                    "response": qa_teach_resp}
+
+        # NEW: Q&A lookup (answer if pattern matches taught)
+        qa_match = self._lookup_qa_response(text)
+        if qa_match:
+            self.affect.event("familiar_input", intensity=0.8)
+            self.episodic.store(text, self.affect.mood(), qa_match, 0.9)
+            self.affect.tick()
+            return {"turn": self.turn, "text": text, "intent": "question",
+                    "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
+                    "response": qa_match}
 
         # L2.5-B: Ask me something (highest priority, overrides pending)
         ask_resp = self._try_ask(text)

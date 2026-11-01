@@ -468,12 +468,22 @@
     container.scrollTop = container.scrollHeight;
   }
 
-  function copyText(t) { navigator.clipboard.writeText(t).then(() => alert("Copied!")); }
+  function copyText(t) { navigator.clipboard.writeText(t).then(() => showToast("Copied!")); }
   function shareText(t) { if(navigator.share) navigator.share({text: t}); }
   
   let currentSpeechText = null;
 
   function speakText(text, btn) {
+    // FIX: null-safe for auto-TTS (no button to update)
+    if (!btn) {
+      if (window.Android && typeof window.Android.speakText === 'function') {
+        window.Android.speakText(text);
+      } else if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+      }
+      return;
+    }
     // Use Native Android TTS if available
     if (window.Android && typeof window.Android.speakText === 'function') {
       if (btn.innerText === '⏸️' || btn.innerHTML.includes('i-play')) {
@@ -768,7 +778,7 @@
         const brainData = JSON.parse(fileData);
         const res = await fetch('/import', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ user_id: brainName, brain_data: brainData, mode: 'replace' })
+          body: JSON.stringify({ user_id: brainName, brain_data: brainData, mode: 'merge' })
         });
         const result = await res.json();
         if (result.ok) {
@@ -790,11 +800,7 @@
         statusBox.style.color = 'white';
         textSpan.innerHTML = '✅ Imported ' + successCount + ' file(s)!<br><small>Brain created: ' + lastImportedBrain + '</small>';
         
-        // Auto-switch to the last imported brain
-        settings.user = lastImportedBrain;
-        localStorage.setItem('nsm_settings', JSON.stringify(settings));
-        document.getElementById('active-brain-name').innerText = lastImportedBrain;
-        document.getElementById('settings-user').value = lastImportedBrain;
+        // FIX: no auto-switch - preserve current active brain
         
         setTimeout(() => loadBrainsList(), 500);
       } else {

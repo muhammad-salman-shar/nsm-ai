@@ -78,6 +78,7 @@ def to_dict(brain):
         "turn": brain.turn,
         "max_depth": brain.max_depth,
         "definitions": dict(brain.definitions),
+        "qa_pairs": list(getattr(brain, "qa_pairs", [])),
         "facts": dict(brain.fact_store.facts),
         "relations": _serialize_relations(brain.relations),
         "lexicon": _serialize_lexicon(brain.lexicon),
@@ -97,6 +98,7 @@ def from_dict(brain, data):
         return False
     brain.turn = data.get("turn", 0)
     brain.definitions = dict(data.get("definitions", {}))
+    brain.qa_pairs = list(data.get("qa_pairs", []))
     for k, v in data.get("facts", {}).items():
         brain.fact_store.facts[k] = v
     _deserialize_relations(data.get("relations", {}), brain.relations)
@@ -187,6 +189,16 @@ def merge_brain_data(existing, new_data):
     # Definitions: new wins on conflict
     merged["definitions"] = dict(existing.get("definitions", {}))
     merged["definitions"].update(new_data.get("definitions", {}))
+
+    # Q&A pairs: union by pattern (existing wins)
+    qa_map = {}
+    for qa in existing.get("qa_pairs", []):
+        qa_map[qa.get("pattern", "").lower()] = qa
+    for qa in new_data.get("qa_pairs", []):
+        k = qa.get("pattern", "").lower()
+        if k not in qa_map:
+            qa_map[k] = qa
+    merged["qa_pairs"] = list(qa_map.values())
     
     # Relations: union (both preserved)
     merged["relations"] = {}
