@@ -756,7 +756,7 @@
       statusBox.style.display = 'block';
       statusBox.style.background = 'var(--surface2)';
       statusBox.style.color = 'var(--text)';
-      textSpan.innerText = 'Importing ' + files.length + ' file(s)...';
+      textSpan.innerText = 'Importing ' + files.length + ' file(s) into "' + (settings.user || 'default') + '"...';
     }
 
     let successCount = 0, failCount = 0, errors = [];
@@ -778,7 +778,7 @@
         const brainData = JSON.parse(fileData);
         const res = await fetch('/import', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ user_id: brainName, brain_data: brainData, mode: 'merge' })
+          body: JSON.stringify({ user_id: (settings.user || 'default').trim() || 'default', brain_data: brainData, mode: 'merge' })
         });
         const result = await res.json();
         if (result.ok) {
@@ -798,7 +798,7 @@
       if (successCount > 0) {
         statusBox.style.background = '#238636';
         statusBox.style.color = 'white';
-        textSpan.innerHTML = '✅ Imported ' + successCount + ' file(s)!<br><small>Brain created: ' + lastImportedBrain + '</small>';
+        textSpan.innerHTML = '✅ Merged ' + successCount + ' file(s) into brain: "' + (settings.user || 'default') + '"';
         
         // FIX: no auto-switch - preserve current active brain
         
