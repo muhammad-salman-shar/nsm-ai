@@ -25,16 +25,19 @@ def _serialize_relations(relations):
 
 
 def _deserialize_relations(data, relations):
+    import time
     for key, bucket in data.items():
+        if "|" not in key: continue
         rel_type, subject = key.split("|", 1)
         store_key = (rel_type, subject)
         relations.relations[store_key] = {}
         for obj, rec in bucket.items():
+            if not isinstance(rec, dict): rec = {}
             relations.relations[store_key][obj] = {
-                "count": rec["count"],
-                "first_seen": rec["first_seen"],
-                "last_seen": rec["last_seen"],
-                "superseded": rec["superseded"],
+                "count": rec.get("count", 1),
+                "first_seen": rec.get("first_seen", time.time()),
+                "last_seen": rec.get("last_seen", time.time()),
+                "superseded": rec.get("superseded", False),
                 "source": rec.get("source", "user"),
             }
 
