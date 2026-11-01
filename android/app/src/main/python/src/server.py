@@ -64,7 +64,11 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/state":
             _json_response(self, 200, get_brain().state())
         elif parsed.path == "/brains":
-            _json_response(self, 200, {"brains": database.list_brains()})
+            try:
+                brains = database.list_brains()
+                _json_response(self, 200, {"brains": brains})
+            except Exception as e:
+                _json_response(self, 500, {"error": str(e)})
         elif parsed.path == "/health":
             _json_response(self, 200, {"ok": True, "service": "NSM", "port": 8081})
         elif parsed.path == "/debug":
@@ -174,23 +178,33 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         elif parsed.path == "/import":
-            user_id = data.get("user_id", "default")
-            import_data = data.get("brain_data")
-            mode = data.get("mode", "merge")
-            if not import_data:
-                _json_response(self, 400, {"error": "No data provided"})
-                return
-            valid, reason = persistence.validate_brain_file(import_data)
-            if not valid:
-                _json_response(self, 400, {"error": f"Invalid NSM file: {reason}"})
-                return
-            current_state = database.load_brain(user_id)
-            final_state = persistence.merge_brain_data(current_state, import_data) if mode == "merge" and current_state else import_data
-            brain = Brain(auto_save_path=None)
-            persistence.from_dict(brain, final_state)
-            database.save_brain(user_id, persistence.to_dict(brain))
-            if user_id in _brain_cache: del _brain_cache[user_id]
-            _json_response(self, 200, {"ok": True})
+            try:
+                user_id = data.get("user_id", "default")
+                import_data = data.get("brain_data")
+                mode = data.get("mode", "merge")
+                if not import_data:
+                    _json_response(self, 400, {"error": "No data provided"})
+                    return
+                valid, reason = persistence.validate_brain_file(import_data)
+                if not valid:
+                    _json_response(self, 400, {"error": f"Invalid NSM file: {reason}"})
+                    return
+                
+                current_state = database.load_brain(user_id)
+                final_state = persistence.merge_brain_data(current_state, import_data) if mode == "merge" and current_state else import_data
+                
+                brain = Brain(auto_save_path=None)
+                persistence.from_dict(brain, final_state)
+                database.save_brain(user_id, persistence.to_dict(brain))
+                
+                if user_id in _brain_cache: 
+                    del _brain_cache[user_id]
+                    
+                _json_response(self, 200, {"ok": True})
+            except Exception as e:
+                import traceback
+                print(f"[IMPORT ERROR] {traceback.format_exc()}")
+                _json_response(self, 500, {"error": str(e)})
             return
 
         elif parsed.path == "/chat":
