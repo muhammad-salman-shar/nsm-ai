@@ -42,6 +42,14 @@ def extract(subject_word, definition_text, correction=False):
     if "not" in words and len(words) >= 2 and words[0] in ("is", "are", "am"):
         return []
 
+    # Handle CANNOT (Negative Capability)
+    if "cannot" in words or ("can" in words and "not" in words):
+        # Find the object after "cannot" or "can not"
+        idx = words.index("cannot") if "cannot" in words else words.index("not")
+        obj = _pick_head_noun(words[idx+1:])
+        if obj and obj != subject:
+            return [{"type": "NOT_CAN", "subject": subject, "object": obj, "correct": True}]
+
     rels = []
 
     if "has" in words:

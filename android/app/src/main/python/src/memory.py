@@ -3,14 +3,33 @@ import time
 import numpy as np
 
 DIM = 10000
-_rng = np.random.default_rng(1337)
 _cache = {}
 
+def _hash_to_vector(seed_str):
+    """Deterministically hashes a string into a DIM-sized binary vector."""
+    import hashlib
+    h = int(hashlib.sha256(seed_str.encode()).hexdigest(), 16)
+    rng = np.random.RandomState(h % (2**32))
+    return rng.randint(0, 2, size=DIM, dtype=np.uint8)
+
 def _vec(symbol):
-    s = str(symbol)
-    if s not in _cache:
-        _cache[s] = _rng.integers(0, 2, size=DIM, dtype=np.uint8)
-    return _cache[s]
+    """Character N-Gram HDC encoding for typo tolerance."""
+    s = str(symbol).lower().strip()
+    if not s:
+        return np.zeros(DIM, dtype=np.uint8)
+    if s in _cache:
+        return _cache[s]
+    if len(s) < 3:
+        _cache[s] = _hash_to_vector(s)
+        return _cache[s]
+        
+    ngrams = [s[i:i+3] for i in range(len(s) - 2)]
+    vectors = [_hash_to_vector(ngram) for ngram in ngrams]
+    arr = np.stack(vectors)
+    result = (arr.sum(axis=0) > (len(vectors) / 2)).astype(np.uint8)
+    
+    _cache[s] = result
+    return result
 
 def bind(*symbols):
     v = np.zeros(DIM, dtype=np.uint8)
@@ -96,7 +115,8 @@ class EpisodicMemory:
         self.episodes = []
 
     def store(self, text, mood, response, binding_strength=1.0, feedback=None):
-        words = [w for w in text.lower().split() if w]
+        import re
+        words = [w for w in re.findall(r"[a-z0-9]+", text.lower()) if w]
         vec = bundle([_vec(w) for w in words]) if words else np.zeros(DIM, dtype=np.uint8)
         ep = {
             "t": time.time(),

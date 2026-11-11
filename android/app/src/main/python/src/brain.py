@@ -5,7 +5,8 @@ from src.memory import Lexicon, EpisodicMemory
 from src.perceptron import Perceptron, TRAINING_DATA
 from src.language import Language
 from src.relations import (extract, parse_query, RelationStore,
-                           CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL, AUX_VERBS)
+                           CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL, AUX_VERBS,
+                           _pick_head_noun)
 from src import persistence
 from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
 from src.producer import produce_svo
@@ -396,6 +397,13 @@ class Brain:
 
             verb_map = {"IS": "is", "HAS": "has", "CAN": "can"}
             verb = verb_map.get(rel_type, "is")
+            
+            # Check for explicit negation (Defeasible Reasoning: specific rule overrides)
+            if rel_type == "CAN":
+                neg_status, _ = self.relations.query("NOT_CAN", subj, obj)
+                if neg_status == "yes":
+                    return f"No, {subj} can not {obj}."
+
             status, detail = self.relations.query(rel_type, subj, obj)
             if status == "yes":
                 if rel_type == "IS":
@@ -467,6 +475,35 @@ class Brain:
         if len(words) < 3:
             return None
         
+        # NEW: Handle CAN/CANNOT BEFORE SVO (modal priority)
+        if "cannot" in words or ("can" in words and "not" in words):
+            can_idx = words.index("cannot") if "cannot" in words else words.index("can")
+            can_subj = [w for w in words[:can_idx] if w not in NOUN_DETERMINERS and w not in AUX_VERBS]
+            can_obj = _pick_head_noun([w for w in words[can_idx+1:] if w != "not"])
+            if can_subj and can_obj:
+                can_subject = can_subj[-1]
+                if can_subject not in {"you", "he", "she", "it", "they", "them"} and len(can_subject) >= 3:
+                    self.relations.add("NOT_CAN", can_subject, can_obj, correct=True)
+                    self.definitions[can_subject] = text.strip()
+                    if not self.lexicon.has(can_obj):
+                        self.lexicon.see(can_obj)
+                    return f"Got it! I learned that {can_subject} cannot {can_obj}."
+            return None
+
+        if "can" in words:
+            can_idx = words.index("can")
+            can_subj = [w for w in words[:can_idx] if w not in NOUN_DETERMINERS and w not in AUX_VERBS]
+            can_obj = _pick_head_noun(words[can_idx+1:])
+            if can_subj and can_obj:
+                can_subject = can_subj[-1]
+                if can_subject not in {"you", "he", "she", "it", "they", "them"} and len(can_subject) >= 3:
+                    self.relations.add("CAN", can_subject, can_obj, correct=False)
+                    self.definitions[can_subject] = text.strip()
+                    if not self.lexicon.has(can_obj):
+                        self.lexicon.see(can_obj)
+                    return f"Got it! I learned that {can_subject} can {can_obj}."
+            return None
+
         # 1. Check for SVO verbs (likes, wants, eats, etc.)
         svo_verb = None
         for w in words:
