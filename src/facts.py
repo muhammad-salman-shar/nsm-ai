@@ -25,7 +25,7 @@ ADJECTIVES = {
 }
 
 NAME_QUERY = re.compile(r"\bwhat(?:'s| is| was) my name\b", re.I)
-AGE_QUERY = re.compile(r"\bhow old am i\b", re.I)
+AGE_QUERY = re.compile(r"\bhow old am i\b|\bwhat is my age\b|\bwhat's my age\b", re.I)
 LOCATION_QUERY = re.compile(r"\bwhere (?:do i live|am i from)\b", re.I)
 
 

@@ -434,6 +434,18 @@ class Brain:
                 if target in self.meanings:
                     return realize(self.meanings[target])
 
+        # Age attribute query: "salman age" / "What is salman age"
+        _words_set = set(_words(text))
+        if "age" in _words_set:
+            _skip = {"age", "is", "are", "was", "were", "my", "i", "your", "me",
+                     "how", "what", "whats", "the", "a", "an", "of", "do", "does", "did",
+                     "old", "you", "he", "she", "it", "they"}
+            for _w in _words(text):
+                if _w not in _skip and len(_w) >= 3:
+                    _ages = self.relations.get("HAS_AGE", _w)
+                    if _ages:
+                        return f"{_w.capitalize()} is {_ages[0]} years old."
+
         lookup = self._lookup_definition(text)
         if lookup:
             return lookup
@@ -1058,6 +1070,13 @@ class Brain:
         # L7: Construction parse (store meaning)
         self._try_construction(text)
 
+        # Age Attribute Learning: "X age is N" (exact pattern)
+        _aw = text.lower().strip().rstrip("?!.").split()
+        if len(_aw) == 4 and _aw[1] == "age" and _aw[2] == "is" and _aw[3].isdigit():
+            _subj, _age = _aw[0], _aw[3]
+            self.relations.add("HAS_AGE", _subj, _age)
+            return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it! {_subj.capitalize()} is {_age} years old."}
+
         # L2: Fact statements (my name is salman)
         fact = extract_fact(text)
         if fact:
@@ -1093,6 +1112,23 @@ class Brain:
         words, intent, conf = self._perceive(text)
         self._attend(words)
         recall = self.episodic.recall(text, top_k=1)
+
+        # AGE QUERY CHECK (before auto_vocab, else curiosity hijacks)
+        _wset = set(_words(text))
+        if ("age" in _wset or "old" in _wset) and _is_question_text(text):
+            _skip = {"age", "old", "is", "are", "was", "were", "my", "i", "your", "me",
+                     "how", "what", "whats", "the", "a", "an", "of", "do", "does", "did",
+                     "you", "he", "she", "it", "they", "am"}
+            for _w in _words(text):
+                if _w not in _skip and len(_w) >= 3:
+                    _ages = self.relations.get("HAS_AGE", _w)
+                    if _ages:
+                        resp = f"{_w.capitalize()} is {_ages[0]} years old."
+                        self.episodic.store(text, self.affect.mood(), resp, self.affect.binding_strength())
+                        self.affect.tick()
+                        return {"turn": self.turn, "text": text, "intent": "question",
+                                "confidence": 1.0, "mood": self.affect.mood(),
+                                "recall": None, "response": resp}
 
         # L13: Auto-vocabulary (silently learn new words first)
         new_words = self._auto_vocab(text)
