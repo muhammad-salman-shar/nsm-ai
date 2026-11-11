@@ -11,7 +11,7 @@ from src import persistence
 from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
 from src.producer import produce_svo
 from src.composer import compose_object
-from src.reasoner import infer_relation
+from src.reasoner import infer_relation_full
 from src.parser_v2 import parse_to_meaning
 from src.realizer import realize, get_article
 from src.llm_teacher import improve_language
@@ -415,9 +415,11 @@ class Brain:
                     return f"No, {subj} {verb} {', '.join(active)}, not {obj}."
                 return f"No, {subj} {verb} {obj} is outdated."
             if status == "no":
-                inferred, reason_msg = infer_relation(self.relations, subj, rel_type, obj)
+                inferred, reason_msg, inferred_conf, inferred_mode = infer_relation_full(self.relations, subj, rel_type, obj)
                 if inferred:
-                    return reason_msg
+                    if inferred_mode == "derived":
+                        return f"Yes, because {reason_msg} (confidence: {int(inferred_conf * 100)}%)"
+                    return f"Yes, {reason_msg}"
                 if detail:
                     # If it's CAN, we say "I know dog can bark" not "dog is bark"
                     known_str = f"{subj} {verb} {detail[0]}" if len(detail) == 1 else f"{subj} {verb} {', '.join(detail[:-1])} or {detail[-1]}"

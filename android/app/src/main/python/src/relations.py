@@ -109,12 +109,15 @@ class RelationStore:
         now = time.time()
         if obj not in bucket:
             bucket[obj] = {"count": 1, "first_seen": now, "last_seen": now,
-                           "superseded": False, "source": "user"}
+                           "superseded": False, "source": "user", "confidence": 0.9}
         else:
             if "count" not in bucket[obj]: bucket[obj]["count"] = 0
             bucket[obj]["count"] += 1
             bucket[obj]["last_seen"] = now
             bucket[obj]["superseded"] = False
+            # Evidence-based confidence (NARS-style)
+            old_conf = bucket[obj].get("confidence", 0.9)
+            bucket[obj]["confidence"] = min(1.0, old_conf + 0.05)
 
         if correct:
             for other, rec in bucket.items():
@@ -123,6 +126,10 @@ class RelationStore:
 
     def add(self, rel_type, subject, obj, correct=False):
         self._rec(rel_type, subject, obj, correct)
+
+    def get_rec(self, rel_type, subject, obj):
+        bucket = self.relations.get((rel_type, subject), {})
+        return bucket.get(obj)
 
     def get(self, rel_type, subject, include_superseded=False):
         bucket = self.relations.get((rel_type, subject), {})
