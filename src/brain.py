@@ -211,7 +211,7 @@ class Brain:
         content = [w for w in q if w not in qw]
         if not content:
             return None
-        for n in range(min(3, len(content)), 0, -1):
+        for n in range(min(4, len(content)), 0, -1):
             for i in range(len(content) - n + 1):
                 phrase = " ".join(content[i:i+n])
                 if phrase in self.definitions or phrase in self.fact_store.facts or any(s == phrase for (_, s) in self.relations.relations.keys()):
@@ -294,6 +294,14 @@ class Brain:
     def _auto_vocab(self, text):
         """Silently adds unknown non-stopword words to lexicon. Returns genuinely new words."""
         new_words = []
+        # Skip auto_vocab if this is a definition query for a known multi-word term
+        # e.g., "Who is Muhammad Salman Shar" -> "muhammad salman" is known, "shar" is extra
+        text_lower = text.lower().strip()
+        def_prefixes = ("what is", "whats", "who is", "whos", "tell me about", "define", "explain")
+        if any(text_lower.startswith(p) for p in def_prefixes):
+            for key in self.definitions:
+                if len(key.split()) >= 2 and key in text_lower:
+                    return []  # Known multi-word target found; no curiosity needed
         # Pre-compute words that are parts of multi-word definition keys
         known_terms = set()
         for key in self.definitions:
@@ -566,6 +574,9 @@ class Brain:
             return None
         if len(subject) < 3:
             return None
+        # Circular guard: "Computer is computer science" (post[0] == subject)
+        if post and post[0] == subject:
+            return f"I can't define '{subject}' using the word '{subject}' itself. Try a different definition."
 
         self.definitions[subject] = text.strip()
         self.lexicon.see(subject, post[:3])
@@ -939,6 +950,17 @@ class Brain:
         return None
 
     def _observe_inner(self, text):
+        # Bare topic: user types just "NeuraSaMu" / "Salman" (isolated known term)
+        if not self.pending and not self.pending_feedback and not _is_cancel_or_greeting(text):
+            _clean = text.strip().lower().rstrip("?!.")
+            if 1 <= len(_clean.split()) <= 4 and _clean in self.definitions:
+                _def = self.definitions[_clean]
+                self.episodic.store(text, self.affect.mood(), _def, self.affect.binding_strength())
+                self.affect.tick()
+                return {"turn": self.turn, "text": text, "intent": "question",
+                        "confidence": 1.0, "mood": self.affect.mood(),
+                        "recall": None, "response": _def}
+
         # L14: Pending Feedback Resolution (User is teaching correction)
         if self.pending_feedback:
             original_question = self.pending_feedback
