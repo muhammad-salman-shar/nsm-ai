@@ -62,5 +62,22 @@ class TestNSMv14Core(unittest.TestCase):
         self.assertIn("programming language", res["response"].lower())
 
 
+    def test_capability_boundary_and_compound_topic(self):
+        self.brain.observe_bulk("CPU can execute binary machine instructions.")
+        self.brain.observe_bulk("SQLite is a serverless database.")
+        self.brain.observe_bulk("Hash table is a data structure. Hash table is a key-value structure.")
+
+        # Boundary test: must stay unknown for SQLite, never falsely claim STORED from CPU
+        res_bound = self.brain.observe_bulk("Can SQLite execute binary machine instructions?")
+        self.assertEqual(res_bound["mode"], "unknown")
+        self.assertIn("no stored evidence", res_bound["response"].lower())
+
+        # Compound topic test: must retrieve BOTH frames for hash table
+        res_comp = self.brain.observe_bulk("What is a hash table and what is it a type of?")
+        self.assertEqual(res_comp["mode"], "stored")
+        self.assertIn("data structure", res_comp["response"].lower())
+        self.assertIn("key-value", res_comp["response"].lower())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -80,6 +80,30 @@ def _clean_phrase(s: str) -> str:
     return s.strip()
 
 
+_ACRONYM_MAP = {
+    "cpu": "CPU",
+    "ram": "RAM",
+    "gpu": "GPU",
+    "api": "API",
+    "sql": "SQL",
+    "sqlite": "SQLite",
+    "ai": "AI",
+    "os": "OS",
+    "nsm": "NSM",
+    "nsm vb": "NSM VB",
+    "neurasamu": "NeuraSaMu",
+    "big o notation": "Big O notation",
+}
+
+
+def _display_entity(name: str) -> str:
+    low = (name or "").strip().lower()
+    if low in _ACRONYM_MAP:
+        return _ACRONYM_MAP[low]
+    words = low.split()
+    return " ".join(_ACRONYM_MAP.get(w, w.capitalize()) for w in words)
+
+
 class Brain:
     """NSM VB v1.4 cognitive engine."""
 
@@ -631,16 +655,17 @@ class Brain:
                 proof_steps=["Core identity recall: NSM VB v1.4 cognitive architecture."],
             )
 
-        # 2. Capability query: "Can X Y?" (Defeasible inheritance + contradiction detection)
+        # 2. Capability query: "Can X Y?" (Defeasible inheritance + strict boundary enforcement)
         m = re.match(r"^can\s+(.+?)\s+([a-zA-Z][a-zA-Z0-9 '-]*)$", q, re.IGNORECASE)
         if m:
             subj = _clean_phrase(m.group(1))
             ability = _clean_phrase(m.group(2))
+            disp_subj = _display_entity(subj)
             res = self.hypergraph.query_capability_or_relation(subj, "CAN", ability)
             if res["mode"] == "contradicted":
                 return self._reply(
                     text,
-                    f"My memory holds conflicting evidence on whether {subj} can {ability}. Tell me which one is correct to resolve it.",
+                    f"My memory holds conflicting evidence on whether {disp_subj} can {ability}. Tell me which one is correct to resolve it.",
                     intent="query_can",
                     mode="contradicted",
                     confidence=res["confidence"],
@@ -650,10 +675,11 @@ class Brain:
             if res["mode"] in {"stored", "derived"}:
                 pol = res["polarity"]
                 basis = "directly stored" if res["mode"] == "stored" else "derived via inheritance"
+                pct = round(res["confidence"] * 100)
                 if pol > 0:
-                    ans = f"Yes, {subj} can {ability} ({basis}, confidence {int(res['confidence'] * 100)}%)."
+                    ans = f"Yes, {disp_subj} can {ability} ({basis}, confidence {pct}%)."
                 else:
-                    ans = f"No, {subj} cannot {ability} ({basis}, confidence {int(res['confidence'] * 100)}%)."
+                    ans = f"No, {disp_subj} cannot {ability} ({basis}, confidence {pct}%)."
                 return self._reply(
                     text,
                     ans,
@@ -663,6 +689,24 @@ class Brain:
                     recalled_ids=res["used_frame_ids"],
                     proof_steps=res["proof_steps"],
                 )
+            # Strict boundary: never hijack an unknown capability query with another entity's vector hit
+            proofs = [f"Boundary check: no stored or inherited CAN frame links '{normalize_entity(subj)}' to '{normalize_entity(ability)}'."]
+            note = ""
+            alt_hits = self.hypergraph.semantic_search(ability, top_k=3, min_score=0.35)
+            for alt_fr, alt_sc in alt_hits:
+                if alt_fr.get("relation") == "CAN" and alt_fr.get("polarity", 1) > 0 and alt_fr.get("agent") != normalize_entity(subj):
+                    note = f" However, my memory shows that {self._frame_to_sentence(alt_fr)}"
+                    proofs.append(f"Contrast note ({alt_sc:.2f}): {alt_fr['agent']} CAN {alt_fr['patient']}")
+                    break
+            return self._reply(
+                text,
+                f"I have no stored evidence that {disp_subj} can {ability}.{note}",
+                intent="query_can",
+                mode="unknown",
+                confidence=0.0,
+                recalled_ids=[],
+                proof_steps=proofs,
+            )
 
         # 3. Role-bound SVO Agent query: "Who bit man?" / "What chased cat?"
         m = re.match(r"^(?:who|what)\s+([a-zA-Z]+)\s+(.+)$", q, re.IGNORECASE)
@@ -746,19 +790,29 @@ class Brain:
                     proof_steps=res["proof_steps"],
                 )
 
-        # 7. Definition / Topic query: "What is X?" / "Who is X?" / "Tell me about X"
+        # 7. Definition / Topic query: "What is X?" / "Who is X?" / compound questions
         m = re.match(r"^(?:what|who)\s+(?:is|are)\s+(.+)$", q, re.IGNORECASE)
         if not m:
             m = re.match(r"^(?:tell me about|explain|define|describe)\s+(.+)$", q, re.IGNORECASE)
         if m:
-            topic = _clean_phrase(m.group(1))
+            raw_topic = m.group(1)
+            # Handle compound phrasing like "a hash table and what is it a type of"
+            primary_part = re.split(r"\s+(?:and|or)\s+(?:what|who|how|why|where)\b", raw_topic, maxsplit=1, flags=re.IGNORECASE)[0]
+            topic = _clean_phrase(primary_part)
             frames = self.hypergraph.get_frames_for_agent(topic)
             if frames:
                 return self._summarize_entity_frames(text, topic, frames)
-            # Check patient side too (e.g. "who is nsm vb" -> reverse links)
             rev_frames = self.hypergraph.get_frames_for_patient(topic)
             if rev_frames:
                 return self._summarize_entity_frames(text, topic, rev_frames)
+            # Longest known entity match inside the query text
+            known_agents = sorted(self.hypergraph._by_agent.keys(), key=len, reverse=True)
+            q_low = low
+            for ent in known_agents:
+                if len(ent) >= 2 and re.search(r"\b" + re.escape(ent) + r"\b", q_low):
+                    ent_frames = self.hypergraph.get_frames_for_agent(ent)
+                    if ent_frames:
+                        return self._summarize_entity_frames(text, ent, ent_frames)
 
         # 8. Bare topic query (1-3 words matching a known entity)
         if len(q.split()) <= 3:
@@ -807,29 +861,29 @@ class Brain:
 
     @staticmethod
     def _frame_to_sentence(fr: Dict[str, Any]) -> str:
-        ag = fr.get("agent", "")
+        ag = _display_entity(fr.get("agent", ""))
         pat = fr.get("patient", "")
         rel = fr.get("relation", "")
         pol = fr.get("polarity", 1)
         if rel == "IS_A":
-            return f"{ag.title()} is {'not ' if pol < 0 else ''}a {pat}."
+            return f"{ag} is {'not ' if pol < 0 else ''}a {pat}."
         if rel == "DEFINED_AS":
-            return f"{ag.title()} is {'not ' if pol < 0 else ''}{pat}."
+            return f"{ag} is {'not ' if pol < 0 else ''}{pat}."
         if rel == "CAN":
-            return f"{ag.title()} {'can' if pol > 0 else 'cannot'} {pat}."
+            return f"{ag} {'can' if pol > 0 else 'cannot'} {pat}."
         if rel == "HAS":
-            return f"{ag.title()} has {pat}."
+            return f"{ag} has {pat}."
         if rel == "HAS_AGE":
-            return f"{ag.title()} is {pat} years old."
+            return f"{ag} is {pat} years old."
         if rel == "LOCATED_IN":
-            return f"{ag.title()} lives in {pat}."
+            return f"{ag} lives in {pat}."
         if rel == "CREATED":
             act = fr.get("action") or "created"
-            return f"{ag.title()} {act} {pat}."
+            return f"{ag} {act} {pat}."
         if rel == "ACTION":
             act = fr.get("modifier") or fr.get("action") or "acted on"
-            return f"{ag.title()} {act} {pat}."
-        return f"{ag.title()} {rel.lower().replace('_', ' ')} {pat}."
+            return f"{ag} {act} {pat}."
+        return f"{ag} {rel.lower().replace('_', ' ')} {pat}."
 
     def _summarize_entity_frames(self, query: str, topic: str, frames: List[Dict[str, Any]]) -> Dict[str, Any]:
         selected = frames[:4]
