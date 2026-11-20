@@ -1,933 +1,1622 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>NSM VB - NeuraSaMu</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>NSM VB v1.4 - NeuraSaMu</title>
 <style>
-  :root[data-theme="dark"] {
-    --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
-    --text: #e6edf3; --text-dim: #8b949e; --accent: #ff6b35;
-    --user-bg: #1f6feb; --nsm-bg: #21262d; --border: #30363d;
+  :root {
+    --bg: #0b0f14;
+    --bg-elev: #121821;
+    --surface: #161d27;
+    --surface2: #1f2835;
+    --glass: rgba(22, 29, 39, 0.84);
+    --text: #eef3f9;
+    --text-dim: #8c98a9;
+    --accent: #ff6b35;
+    --accent-soft: rgba(255, 107, 53, 0.15);
+    --accent-glow: rgba(255, 107, 53, 0.35);
+    --user-bg: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    --nsm-bg: #171f2b;
+    --border: rgba(255, 255, 255, 0.08);
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+    --radius: 18px;
+    --spring: cubic-bezier(0.22, 1, 0.36, 1);
   }
-  :root[data-theme="light"] {
-    --bg: #f6f8fa; --surface: #ffffff; --surface2: #f3f4f6;
-    --text: #24292f; --text-dim: #57606a; --accent: #ff6b35;
-    --user-bg: #1f6feb; --nsm-bg: #ffffff; --border: #d0d7de;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
-  body { background: var(--bg); color: var(--text); display: flex; height: 100vh; height: 100dvh; overflow: hidden; transition: background 0.3s; }
-  
-  /* SVG ICONS */
-  .svg-icon { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .svg-icon-sm { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .svg-icon-lg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-  /* SIDEBAR */
-  #sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
-  #sidebar-overlay.open { display: block; }
-  #sidebar { width: 280px; background: var(--surface); display: flex; flex-direction: column; transition: transform 0.3s; border-right: 1px solid var(--border); position: absolute; height: 100%; z-index: 100; transform: translateX(-100%); }
-  #sidebar.open { transform: translateX(0); }
-  #search-box { width: 100%; padding: 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; margin: 12px 0; outline: none; }
-  #chat-list { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
-  .chat-item { padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text); display: flex; justify-content: space-between; align-items: center; background: var(--surface2); }
-  .chat-item.active { border-left: 3px solid var(--accent); }
-  .chat-item-actions { display: flex; gap: 6px; opacity: 0.6; }
-  .icon-btn { background: none; border: none; cursor: pointer; color: var(--text); padding: 4px; display: flex; align-items: center; justify-content: center; }
-  .icon-btn:active { color: var(--accent); }
-  #sidebar-bottom { padding: 16px; border-top: 1px solid var(--border); }
-  .btn-settings { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; }
-
-  /* MAIN */
-  #main { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
-  header { padding: 12px 16px; background: var(--surface); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .header-title { display: flex; align-items: center; gap: 10px; font-weight: bold; }
-  .header-actions { display: flex; gap: 6px; }
-  .header-actions button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  
-  /* CHAT */
-  #chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-  .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; }
-  .msg-wrapper.user { align-self: flex-end; align-items: flex-end; }
-  .msg-wrapper.nsm { align-self: flex-start; align-items: flex-start; }
-  .msg { padding: 12px 16px; border-radius: 16px; font-size: 15px; line-height: 1.5; word-wrap: break-word; }
-  .user .msg { background: var(--user-bg); color: white; border-bottom-right-radius: 4px; }
-  .nsm .msg { background: var(--nsm-bg); color: var(--text); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
-  
-  /* BUBBLE ACTIONS */
-  .dropdown-menu { display: none; position: absolute; right: 0; top: 100%; margin-top: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); min-width: 180px; z-index: 50; overflow: hidden; }
-  .dropdown-menu.open { display: block; }
-  .dropdown-menu div { padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); border-bottom: 1px solid var(--border); }
-  .dropdown-menu div:last-child { border-bottom: none; }
-  .dropdown-menu div:active { background: var(--surface2); }
-  .dropdown-menu div svg { color: var(--accent); }
-
-  .msg-actions { display: flex; gap: 10px; margin-top: 6px; opacity: 0.6; }
-  .msg-actions button { background: none; border: none; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .msg-actions button:active { color: var(--accent); }
-  .edit-input { width: 100%; background: transparent; color: white; border: none; border-bottom: 1px solid white; outline: none; font-size: 15px; }
-
-  /* TYPING ANIMATION */
-  .typing-indicator { display: flex; gap: 4px; padding: 16px; background: var(--nsm-bg); border-radius: 16px; border: 1px solid var(--border); width: fit-content; align-self: flex-start; }
-  .typing-indicator span { display: block; width: 6px; height: 6px; background: var(--text-dim); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
-  .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-  .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-  @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-
-  /* INPUT */
-  #input-area { padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 12px; flex-shrink: 0; }
-  #message-input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 14px 18px; border-radius: 24px; outline: none; font-size: 15px; }
-  .send-btn { background: var(--accent); color: white; border: none; padding: 0 16px; border-radius: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 52px; height: 48px; transition: background 0.2s; }
-  .send-btn.stop { background: #8b2e2e; }
-
-  /* SETTINGS MODAL & SUB-MENUS */
-  .toast {
-    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.85); color: #fff; padding: 10px 20px;
-    border-radius: 20px; font-size: 14px; z-index: 10000;
-    animation: fadeInOut 2s forwards; pointer-events: none;
-  }
-  @keyframes fadeInOut {
-    0% { opacity: 0; bottom: 60px; }
-    10% { opacity: 1; bottom: 80px; }
-    90% { opacity: 1; bottom: 80px; }
-    100% { opacity: 0; bottom: 100px; }
+  [data-theme="light"] {
+    --bg: #f4f6fa;
+    --bg-elev: #ffffff;
+    --surface: #ffffff;
+    --surface2: #edf1f7;
+    --glass: rgba(255, 255, 255, 0.88);
+    --text: #18202c;
+    --text-dim: #5c6878;
+    --accent: #ff6b35;
+    --accent-soft: rgba(255, 107, 53, 0.12);
+    --accent-glow: rgba(255, 107, 53, 0.25);
+    --user-bg: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    --nsm-bg: #ffffff;
+    --border: rgba(15, 23, 42, 0.09);
+    --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
   }
 
-  .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-  .modal-content { background: var(--surface); padding: 20px; border-radius: 16px; width: 90%; max-width: 400px; border: 1px solid var(--border); max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; position: relative; }
-  
-  .settings-menu { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-  .settings-item { padding: 16px; background: var(--surface2); border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 500; transition: 0.2s; }
-  .settings-item:active { background: var(--border); }
-  .settings-item-left { display: flex; align-items: center; gap: 12px; }
-  
-  .settings-view { display: none; flex-direction: column; height: 100%; overflow-y: auto; }
-  .settings-view.active { display: flex; }
-  .settings-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-  .back-btn { background: none; border: none; color: var(--text); cursor: pointer; padding: 4px 8px 4px 0; display: flex; align-items: center; }
-  .settings-group label { display: block; font-size: 13px; color: var(--text-dim); margin: 12px 0 6px 0; font-weight: 500; }
-  .settings-group input, .settings-group select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; outline: none; font-size: 14px; }
-  .btn-primary { background: var(--accent); color: white; border: none; padding: 14px; border-radius: 10px; cursor: pointer; width: 100%; font-weight: 600; margin-top: auto; }
-  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 600; margin-top: 8px; display: flex; justify-content: center; align-items: center; gap: 8px;}
-  #test-llm-result { margin-top: 10px; font-size: 13px; padding: 10px; border-radius: 8px; display: none; text-align: center; }
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* Layout */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    width: 100%;
+    position: relative;
+  }
+
+  /* Top Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--glass);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    z-index: 20;
+    flex-shrink: 0;
+  }
+  .hdr-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .brand-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+    animation: pulseGlow 2.4s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  .brand-title {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ver-pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+  }
+  .hud-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hdr-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.16s var(--spring), background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  .icon-btn:active {
+    transform: scale(0.9);
+  }
+  .icon-btn.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .icon-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Chat Area */
+  #chat-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px 14px 20px;
+    scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Empty Hero */
+  .hero {
+    margin: auto 0;
+    text-align: center;
+    padding: 22px 14px;
+    animation: fadeUp 0.48s var(--spring) both;
+  }
+  .hero-orb {
+    width: 66px;
+    height: 66px;
+    margin: 0 auto 14px;
+    border-radius: 22px;
+    background: linear-gradient(145deg, #ff7e47, #ff4d1a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 30px var(--accent-glow);
+    animation: floatOrb 3.6s ease-in-out infinite;
+  }
+  .hero-orb svg {
+    width: 34px;
+    height: 34px;
+    stroke: #fff;
+    fill: none;
+    stroke-width: 1.9;
+  }
+  .hero h1 {
+    margin: 0 0 6px;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  .hero p {
+    margin: 0 auto 18px;
+    max-width: 360px;
+    color: var(--text-dim);
+    font-size: 13.5px;
+  }
+  .chip-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .starter-chip {
+    text-align: left;
+    padding: 11px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform 0.18s var(--spring), border-color 0.2s ease, background 0.2s ease;
+  }
+  .starter-chip:active {
+    transform: scale(0.97);
+    border-color: var(--accent);
+  }
+  .starter-chip span {
+    display: block;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  /* Message Bubbles */
+  .msg-row {
+    display: flex;
+    flex-direction: column;
+    max-width: 88%;
+    animation: msgEnter 0.34s var(--spring) both;
+  }
+  .msg-row.user {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+  .msg-row.nsm {
+    align-self: flex-start;
+    align-items: flex-start;
+  }
+  .bubble {
+    padding: 11px 15px;
+    border-radius: 18px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    font-size: 14.5px;
+    line-height: 1.5;
+    position: relative;
+  }
+  .msg-row.user .bubble {
+    background: var(--user-bg);
+    color: #fff;
+    border-bottom-right-radius: 6px;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
+  }
+  .msg-row.nsm .bubble {
+    background: var(--nsm-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 6px;
+    box-shadow: var(--shadow);
+  }
+
+  .meta-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--text-dim);
+  }
+  .badge.stored { background: rgba(34, 197, 94, 0.14); color: #22c55e; }
+  .badge.derived { background: rgba(59, 130, 246, 0.16); color: #60a5fa; }
+  .badge.contradicted { background: rgba(245, 158, 11, 0.16); color: #f59e0b; }
+  .badge.unknown { background: rgba(148, 163, 184, 0.16); color: var(--text-dim); }
+  .badge.cortex { background: var(--accent-soft); color: var(--accent); }
+
+  /* Proof Trace Accordion */
+  .proof-box {
+    margin-top: 8px;
+    border-top: 1px dashed var(--border);
+    padding-top: 6px;
+  }
+  .proof-toggle {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 2px 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .proof-list {
+    display: none;
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--surface2);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    list-style: none;
+  }
+  .proof-list.open {
+    display: block;
+    animation: fadeUp 0.24s var(--spring) both;
+  }
+  .proof-list li {
+    margin-bottom: 4px;
+  }
+  .proof-list li:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Message Action Bar */
+  .msg-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+    padding: 0 4px;
+  }
+  .mini-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 11.5px;
+    padding: 4px 7px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.14s var(--spring);
+  }
+  .mini-btn:active {
+    transform: scale(0.88);
+    background: var(--surface2);
+  }
+  .mini-btn.voted-up { color: var(--ok); background: rgba(34, 197, 94, 0.12); }
+  .mini-btn.voted-down { color: var(--danger); background: rgba(239, 68, 68, 0.12); }
+
+  /* Typing Indicator */
+  .typing-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 2px;
+  }
+  .typing-dots span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: dotBounce 1.1s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.16s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.32s; }
+
+  /* Bottom Input Dock */
+  #input-area {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #message-input {
+    flex: 1;
+    min-height: 44px;
+    max-height: 120px;
+    resize: none;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 11px 14px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14.5px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  #message-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  #send-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 15px;
+    border: none;
+    background: linear-gradient(135deg, #ff7e47, #ff5722);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 6px 18px var(--accent-glow);
+    transition: transform 0.16s var(--spring), opacity 0.2s ease;
+  }
+  #send-btn:active { transform: scale(0.9); }
+  #send-btn.stop-mode {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 6px 18px rgba(239, 68, 68, 0.35);
+  }
+  #send-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke: #fff;
+    fill: none;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Sidebar Drawer */
+  #sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.52);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.26s ease;
+    z-index: 40;
+  }
+  #sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, 315px);
+    background: var(--bg-elev);
+    border-right: 1px solid var(--border);
+    transform: translateX(-104%);
+    transition: transform 0.34s var(--spring);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow);
+  }
+  #sidebar.open {
+    transform: translateX(0);
+  }
+  .sb-head {
+    padding: 16px 14px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sb-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sb-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--text-dim);
+    margin: 0 0 8px 2px;
+  }
+  .sb-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .input-field {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13.5px;
+    outline: none;
+  }
+  .input-field:focus {
+    border-color: var(--accent);
+  }
+  .btn {
+    padding: 9px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s var(--spring), background 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn:active { transform: scale(0.95); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn-danger {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: var(--danger);
+  }
+  .list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 11px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid transparent;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+  }
+  .list-item.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .list-item-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sb-foot {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Settings Modal */
+  #settings-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.58);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 60;
+  }
+  #settings-modal.open {
+    display: flex;
+    animation: fadeIn 0.2s ease both;
+  }
+  .modal-sheet {
+    width: 100%;
+    max-width: 520px;
+    max-height: 88dvh;
+    background: var(--bg-elev);
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: sheetUp 0.34s var(--spring) both;
+  }
+  .modal-head {
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .modal-body {
+    padding: 16px 18px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .tab-pane { display: none; flex-direction: column; gap: 12px; }
+  .tab-pane.active { display: flex; animation: fadeUp 0.24s var(--spring) both; }
+  .field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .stat-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 12px;
+  }
+  .stat-val {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .stat-lbl {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .status-box {
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 12.5px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .status-box.ok { display: block; border-color: var(--ok); color: var(--ok); }
+  .status-box.err { display: block; border-color: var(--danger); color: var(--danger); }
+
+  /* PIN Lock Screen */
+  #pin-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 14px;
+  }
+  #pin-screen.open { display: flex; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 78px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.28s var(--spring);
+    z-index: 90;
+    max-width: 90vw;
+    text-align: center;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Keyframes */
+  @keyframes msgEnter {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes sheetUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes pulseGlow {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.25); opacity: 0.72; }
+  }
+  @keyframes floatOrb {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes dotBounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.45; }
+    40% { transform: scale(1.1); opacity: 1; }
+  }
 </style>
 </head>
 <body>
 
-<!-- ICON DEFINITIONS (SVG) -->
-<svg style="display: none;">
-  <symbol id="i-menu" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
-  <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
-  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
-  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
-  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></symbol>
-  <symbol id="i-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></symbol>
-  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
-  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
-  <symbol id="i-send" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
-  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" ry="2"/></symbol>
-  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></symbol>
-  <symbol id="i-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
-  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
-  <symbol id="i-paint" viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></symbol>
-  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></symbol>
-  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
-  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
-</svg>
-
-<div id="pin-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; flex-direction: column; justify-content: center; align-items: center;">
-  <svg class="svg-icon-lg" style="color: var(--accent); width: 48px; height: 48px; margin-bottom: 20px;"><use href="#i-lock"/></svg>
-  <h2 style="color: var(--accent); margin-bottom: 20px;">NSM is Locked</h2>
-  <input type="password" id="pin-input" maxlength="4" placeholder="****" oninput="checkPin()" style="width: 200px; text-align: center; font-size: 24px; letter-spacing: 5px; background: var(--surface); border: 2px solid var(--accent); color: var(--text); padding: 10px; border-radius: 8px; outline: none;">
-  <p id="pin-error" style="color:red; margin-top:10px; display:none;">Wrong PIN</p>
+<div id="pin-screen">
+  <div class="hero-orb">
+    <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+  </div>
+  <h2 style="margin:0;">NSM VB Locked</h2>
+  <p style="margin:0;color:var(--text-dim);font-size:13px;">Enter your PIN to unlock this brain.</p>
+  <input id="pin-input" type="password" inputmode="numeric" maxlength="8" class="input-field" style="max-width:220px;text-align:center;font-size:18px;letter-spacing:6px;" placeholder="••••" />
+  <div id="pin-error" style="color:var(--danger);font-size:12.5px;min-height:18px;"></div>
+  <button class="btn btn-primary" onclick="unlockPin()">Unlock</button>
 </div>
 
-<div id="sidebar-overlay" onclick="closeSidebar()"></div>
-<div id="sidebar">
-  <div style="padding: 16px;">
-    <input type="text" id="search-box" placeholder="Search chats..." oninput="loadChatList(this.value)">
-  </div>
-  <div id="chat-list"></div>
-  <div id="sidebar-bottom">
-    <button class="btn-settings" onclick="openSettings()">
-      <svg class="svg-icon"><use href="#i-settings"/></svg> Settings
-    </button>
-  </div>
-</div>
-
-<div id="main">
+<div id="app">
   <header>
-    <div class="header-title">
-      <button class="icon-btn" onclick="openSidebar()" style="font-size: 20px;"><svg class="svg-icon"><use href="#i-menu"/></svg></button>
-      <span>NSM VB</span>
-    </div>
-    <div class="header-actions" style="position: relative;">
-      <button id="auto-tts-btn" onclick="toggleAutoTTS()" style="color: var(--text-dim);"><svg class="svg-icon"><use href="#i-volume"/></svg></button>
-      <button onclick="startNewChat()"><svg class="svg-icon"><use href="#i-plus"/></svg></button>
-      <button onclick="toggleMenu(event)"><svg class="svg-icon"><use href="#i-more"/></svg></button>
-      <div id="header-menu" class="dropdown-menu">
-        <div onclick="deleteCurrentChat(); closeMenu();"><svg class="svg-icon-sm"><use href="#i-trash"/></svg> Delete Chat</div>
-        <div onclick="shareCurrentChat(); closeMenu();"><svg class="svg-icon-sm"><use href="#i-share"/></svg> Share Chat</div>
-        <div onclick="downloadCurrentChat(); closeMenu();"><svg class="svg-icon-sm"><use href="#i-download"/></svg> Download (.txt)</div>
+    <div class="hdr-left">
+      <button class="icon-btn" onclick="openSidebar()" aria-label="Menu">
+        <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="brand-meta">
+        <div class="brand-row">
+          <span class="pulse-dot"></span>
+          <span class="brand-title" id="active-brain-name">default</span>
+          <span class="ver-pill">v1.4</span>
+        </div>
+        <div class="hud-sub" id="hud-stats">Loading cognitive engine...</div>
       </div>
+    </div>
+    <div class="hdr-actions">
+      <button class="icon-btn" id="sleep-btn" onclick="triggerSleep()" title="Sleep Consolidation">
+        <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button class="icon-btn" id="auto-tts-btn" onclick="toggleAutoTTS()" title="Auto Voice">
+        <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      </button>
+      <button class="icon-btn" onclick="startNewChat()" title="New Chat">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="icon-btn" onclick="openSettings()" title="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.25.4-1.51 1z"/></svg>
+      </button>
     </div>
   </header>
-  
-  <div id="chat-container"></div>
+
+  <main id="chat-container"></main>
 
   <div id="input-area">
-    <input type="text" id="message-input" onkeypress="handleEnter(event)" autocomplete="off">
-    <button id="send-btn" class="send-btn" onclick="handleSendClick()">
-      <svg class="svg-icon-lg"><use href="#i-send"/></svg>
+    <textarea id="message-input" rows="1" placeholder="Teach a fact, ask a question, or test reasoning..."></textarea>
+    <button id="send-btn" onclick="handleSendClick()" aria-label="Send">
+      <svg id="send-icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     </button>
   </div>
 </div>
 
-<!-- SETTINGS MODAL -->
-<div id="settings-modal" class="modal">
-  <div class="modal-content">
-    
-    <!-- MAIN MENU -->
-    <div id="settings-main" class="settings-view active">
-      <h2 style="margin-bottom: 16px;">Settings</h2>
-      <div class="settings-menu">
-        <div class="settings-item" onclick="showSettingsView('general')">
-          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-paint"/></svg> Appearance</div>
-          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
-        </div>
-        <div class="settings-item" onclick="showSettingsView('llm')">
-          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-cpu"/></svg> AI Model</div>
-          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
-        </div>
-        <div class="settings-item" onclick="showSettingsView('security')">
-          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-lock"/></svg> Security</div>
-          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
-        </div>
-        <div class="settings-item" onclick="showSettingsView('data')">
-          <div class="settings-item-left"><svg class="svg-icon" style="color: var(--accent);"><use href="#i-database"/></svg> Data & Memory</div>
-          <svg class="svg-icon-sm"><use href="#i-chevron-right"/></svg>
-        </div>
-      </div>
-      <button class="btn-secondary" style="margin-top: 20px;" onclick="closeModal('settings-modal')">Close</button>
+<!-- Sidebar -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+<aside id="sidebar">
+  <div class="sb-head">
+    <div>
+      <div style="font-weight:800;font-size:16px;">NSM VB <span style="color:var(--accent);">v1.4</span></div>
+      <div style="font-size:11px;color:var(--text-dim);">NeuraSaMu Cognitive Engine</div>
     </div>
-
-    <!-- GENERAL VIEW -->
-    <div id="settings-general" class="settings-view">
-      <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
-        <h2>Appearance</h2>
+    <button class="icon-btn" onclick="closeSidebar()">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="sb-body">
+    <div>
+      <div class="sb-section-title">Brains (Isolated Memories)</div>
+      <div class="sb-row">
+        <input id="new-brain-name" class="input-field" placeholder="New brain name..." />
+        <button class="btn btn-primary" onclick="createNewBrain()">Add</button>
       </div>
-      <div class="settings-group">
-        <label>Theme</label>
-        <select id="settings-theme" onchange="applyTheme(this.value)">
-          <option value="system">System Default</option>
-          <option value="dark">Dark Mode</option>
-          <option value="light">Light Mode</option>
-        </select>
-        <label>User Name</label>
-        <input type="text" id="settings-user" placeholder="e.g. salman">
-      </div>
-      <button class="btn-primary" onclick="saveSettings()">Save</button>
+      <div id="brains-list"></div>
     </div>
-
-    <!-- LLM VIEW -->
-    <div id="settings-llm" class="settings-view">
-      <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
-        <h2>AI Model</h2>
-      </div>
-      <div class="settings-group">
-        <label>Local LLM URL</label>
-        <input type="text" id="settings-url" placeholder="http://127.0.0.1:8080/v1">
-        <label>Model Name</label>
-        <input type="text" id="settings-model" placeholder="e.g. samu">
-        <label>API Key (Optional)</label>
-        <input type="password" id="settings-key" placeholder="gsk_...">
-        <button class="btn-secondary" onclick="testLLM()">Test Connection</button>
-        <div id="test-llm-result"></div>
-      </div>
-      <button class="btn-primary" onclick="saveSettings()">Save</button>
+    <div>
+      <div class="sb-section-title">Chats (Current Brain)</div>
+      <button class="btn" style="width:100%;margin-bottom:8px;" onclick="startNewChat(); closeSidebar();">+ Start Fresh Chat</button>
+      <div id="chat-list"></div>
     </div>
+  </div>
+  <div class="sb-foot">
+    <span>Built by NeuraSaMu</span>
+    <span style="color:var(--accent);font-weight:700;">neurasamu.com</span>
+  </div>
+</aside>
 
-    <!-- SECURITY VIEW -->
-    <div id="settings-security" class="settings-view">
-      <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
-        <h2>Security</h2>
-      </div>
-      <div class="settings-group">
-        <label>PIN Lock</label>
-        <select id="settings-pin-enabled">
-          <option value="off">Disabled</option>
-          <option value="on">Enabled</option>
-        </select>
-        <label>Set 4-digit PIN</label>
-        <input type="password" id="settings-pin" maxlength="4" placeholder="****">
-      </div>
-      <button class="btn-primary" onclick="saveSettings()">Save</button>
+<!-- Settings Modal -->
+<div id="settings-modal" onclick="if(event.target===this) closeModal()">
+  <div class="modal-sheet">
+    <div class="modal-head">
+      <div style="font-weight:800;font-size:16px;">NSM VB v1.4 Settings</div>
+      <button class="icon-btn" onclick="closeModal()">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
-
-    <!-- DATA VIEW (BRAIN MANAGER) -->
-    <div id="settings-data" class="settings-view">
-      <div class="settings-header">
-        <button class="back-btn" onclick="showSettingsView('main')"><svg class="svg-icon"><use href="#i-back"/></svg></button>
-        <h2>Brain Manager</h2>
-      </div>
-      
-      <!-- Active Brain -->
-      <div class="settings-group" style="background: var(--surface2); padding: 12px; border-radius: 10px;">
-        <label style="color: var(--accent); font-weight: bold;">Active Brain</label>
-        <div style="font-size: 16px; margin-top: 4px;" id="active-brain-name">default</div>
-      </div>
-      
-      <!-- Create New Brain -->
-      <div class="settings-group" style="margin-top: 10px;">
-        <label>Create New Brain</label>
-        <div style="display: flex; gap: 8px;">
-            <input type="text" id="new-brain-name" placeholder="e.g. salman" style="margin-bottom:0; flex:1;">
-            <button class="btn-secondary" onclick="createNewBrain()" style="margin-top:0; width:auto; padding: 0 16px;">Create</button>
+    <div class="modal-tabs">
+      <button class="tab-btn active" onclick="switchTab('tab-api', this)">Samu Lab API</button>
+      <button class="tab-btn" onclick="switchTab('tab-memory', this)">Brain &amp; Data</button>
+      <button class="tab-btn" onclick="switchTab('tab-general', this)">Appearance &amp; PIN</button>
+    </div>
+    <div class="modal-body">
+      <!-- API Tab -->
+      <div id="tab-api" class="tab-pane active">
+        <div style="font-size:12.5px;color:var(--text-dim);">
+          Connect your <b>Samu Lab</b> or any OpenAI-compatible API endpoint as NSM's Language Cortex. Leave blank to run 100% offline.
         </div>
+        <div>
+          <label class="field-label" for="settings-url">API Base URL</label>
+          <input id="settings-url" class="input-field" placeholder="e.g. http://127.0.0.1:8080/v1" />
+        </div>
+        <div>
+          <label class="field-label" for="settings-model">Model Name</label>
+          <input id="settings-model" class="input-field" placeholder="e.g. samu-model or llama-3.2" />
+        </div>
+        <div>
+          <label class="field-label" for="settings-key">API Key (Optional for local Samu Lab)</label>
+          <input id="settings-key" type="password" class="input-field" placeholder="sk-... (optional)" />
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" style="flex:1;" onclick="saveSettings()">Save API Settings</button>
+          <button class="btn" onclick="testLLMConnection()">Test Connection</button>
+        </div>
+        <div id="test-llm-result" class="status-box"></div>
       </div>
 
-      <!-- Import Status -->
-      <div id="import-status" style="display: none; position: relative; margin-top: 10px; padding: 10px 30px 10px 10px; border-radius: 8px; font-size: 13px;">
-        <span id="import-status-text"></span>
-        <span onclick="document.getElementById('import-status').style.display='none'" style="position: absolute; top: 8px; right: 10px; cursor: pointer; font-weight: bold; font-size: 16px;">×</span>
+      <!-- Brain & Data Tab -->
+      <div id="tab-memory" class="tab-pane">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-val" id="st-frames">0</div><div class="stat-lbl">Hypergraph Frames</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-senses">0</div><div class="stat-lbl">Disambiguated Senses</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-episodes">0</div><div class="stat-lbl">Episodic Traces</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-schemas">0</div><div class="stat-lbl">Sleep Schemas</div></div>
+        </div>
+        <button class="btn btn-primary" onclick="triggerSleep()">Run Sleep Consolidation Now</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" style="flex:1;" onclick="exportMemory()">Export Brain JSON</button>
+          <button class="btn" style="flex:1;" onclick="document.getElementById('import-file').click()">Import Brain JSON</button>
+          <input id="import-file" type="file" accept=".json,application/json" style="display:none;" onchange="importMemory(event)" />
+        </div>
+        <div>
+          <label class="field-label" for="import-mode">Import Mode</label>
+          <select id="import-mode" class="input-field">
+            <option value="merge">Merge with current brain (safe)</option>
+            <option value="replace">Replace current brain completely</option>
+          </select>
+        </div>
+        <div id="import-status" class="status-box"></div>
+        <button class="btn btn-danger" onclick="resetCurrentBrain()">Reset Active Brain Memory</button>
       </div>
 
-      <!-- Saved Brains List -->
-      <label style="margin-top: 16px; display: block; font-size: 13px; color: var(--text-dim); font-weight: 500;">SAVED BRAINS</label>
-      <input type="text" id="brain-search" placeholder="Search brains..." oninput="loadBrainsList(this.value)" style="width: 100%; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; margin-top: 6px; margin-bottom: 8px; font-size: 13px;">
-      <div id="brains-list" style="margin-top: 8px; max-height: 200px; overflow-y: auto;">
-        <div style="color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px;">Loading...</div>
+      <!-- General Tab -->
+      <div id="tab-general" class="tab-pane">
+        <div>
+          <label class="field-label" for="settings-theme">App Theme</label>
+          <select id="settings-theme" class="input-field" onchange="applyTheme(this.value)">
+            <option value="dark">Dark (NeuraSaMu Obsidian)</option>
+            <option value="light">Light (Clean Paper)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="settings-pin">Optional App PIN Lock (leave blank to disable)</label>
+          <input id="settings-pin" type="password" inputmode="numeric" maxlength="8" class="input-field" placeholder="4-digit PIN (optional)" />
+        </div>
+        <button class="btn btn-primary" onclick="saveGeneralSettings()">Save Appearance &amp; PIN</button>
       </div>
-
-      <!-- Actions -->
-      <div class="settings-group" style="margin-top: 16px;">
-        <button class="btn-secondary" onclick="exportMemory()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-download"/></svg> Export Current Brain</button>
-        <button class="btn-secondary" onclick="document.getElementById('import-file').click()"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-refresh"/></svg> Import Brain File</button>
-        <input type="file" id="import-file" style="display:none" accept=".json" multiple onchange="importMemory(event)">
-        <button class="btn-secondary" onclick="loadSampleBrain()" style="margin-top: 8px; background: var(--accent); color: white;"><svg class="svg-icon-sm" style="margin-right:8px;"><use href="#i-cpu"/></svg> Generate Salman Brain (Demo)</button>
-      </div>
-      <button class="btn-primary" onclick="showSettingsView('main')">Back</button>
     </div>
-
   </div>
 </div>
 
+<div id="toast"></div>
+
 <script>
-  let currentChatId = Date.now().toString();
-  let chats = JSON.parse(localStorage.getItem('nsm_chats') || '{}');
-  let settings = JSON.parse(localStorage.getItem('nsm_settings') || '{"user": "default", "theme": "system", "pinEnabled": "off", "autoTTS": false}');
-  
-  let currentController = null;
-  let isGenerating = false;
+const STORAGE_KEYS = {
+  brain: "nsm_v14_active_brain",
+  chats: "nsm_v14_chats",
+  settings: "nsm_v14_settings",
+  tts: "nsm_v14_auto_tts"
+};
 
-  function showToast(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerText = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2000);
+let activeBrain = safeGet(STORAGE_KEYS.brain) || "default";
+let allChats = safeJson(STORAGE_KEYS.chats, {});
+let settings = safeJson(STORAGE_KEYS.settings, {
+  url: "",
+  model: "",
+  key: "",
+  theme: "dark",
+  pin: ""
+});
+let autoTTS = safeGet(STORAGE_KEYS.tts) === "1";
+let currentChatId = null;
+let isSending = false;
+let activeAbort = null;
+
+function safeGet(k) {
+  try { return localStorage.getItem(k); } catch { return null; }
+}
+function safeSet(k, v) {
+  try { localStorage.setItem(k, v); } catch {}
+}
+function safeJson(k, fallback) {
+  try {
+    const raw = localStorage.getItem(k);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+function applyTheme(theme) {
+  const t = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", t);
+  settings.theme = t;
+  safeSet(STORAGE_KEYS.settings, JSON.stringify(settings));
+}
+
+function getBrainChats() {
+  if (!Array.isArray(allChats[activeBrain])) allChats[activeBrain] = [];
+  return allChats[activeBrain];
+}
+
+function getCurrentChat() {
+  const list = getBrainChats();
+  let chat = list.find(c => c.id === currentChatId);
+  if (!chat) {
+    chat = { id: "c_" + Date.now(), title: "New Session", messages: [] };
+    list.unshift(chat);
+    currentChatId = chat.id;
+    persistChats();
   }
+  return chat;
+}
 
-  function toggleAutoTTS() {
-    settings.autoTTS = !settings.autoTTS;
-    localStorage.setItem('nsm_settings', JSON.stringify(settings));
-    updateTTSButton();
-    showToast(settings.autoTTS ? "Auto Read Aloud: ON" : "Auto Read Aloud: OFF");
-  }
+function persistChats() {
+  safeSet(STORAGE_KEYS.chats, JSON.stringify(allChats));
+}
 
-  function updateTTSButton() {
-    const btn = document.getElementById('auto-tts-btn');
-    if (btn) {
-      btn.style.color = settings.autoTTS ? 'var(--accent)' : 'var(--text-dim)';
-    }
-  }
+function startNewChat() {
+  const list = getBrainChats();
+  const chat = { id: "c_" + Date.now(), title: "New Session", messages: [] };
+  list.unshift(chat);
+  currentChatId = chat.id;
+  persistChats();
+  renderChatList();
+  renderMessages();
+}
 
-  function init() {
-    applyTheme(settings.theme || 'system');
-    updateTTSButton();
-    document.getElementById('settings-theme').value = settings.theme || 'system';
-    document.getElementById('settings-user').value = settings.user || "default";
-    document.getElementById('settings-url').value = settings.url || "";
-    document.getElementById('settings-model').value = settings.model || "";
-    document.getElementById('settings-key').value = settings.key || "";
-    document.getElementById('settings-pin-enabled').value = settings.pinEnabled || "off";
-    document.getElementById('settings-pin').value = settings.pin || "";
-    
-    if (settings.pinEnabled === 'on' && settings.pin) document.getElementById('pin-screen').style.display = 'flex';
-    const chatIds = Object.keys(chats);
-    if (chatIds.length > 0) {
-        chatIds.sort((a, b) => {
-            const timeA = chats[a].updated_at || parseInt(a);
-            const timeB = chats[b].updated_at || parseInt(b);
-            return timeB - timeA;
-        });
-        currentChatId = chatIds[0];
-    } else {
-        currentChatId = Date.now().toString();
-        chats[currentChatId] = { title: "New Chat", messages: [], updated_at: Date.now() };
-    }
-    
-    renderChat(currentChatId);
-    loadChatList();
-  }
-
-  function applyTheme(theme) {
-    if (theme === 'system') {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    } else {
-      document.documentElement.setAttribute('data-theme', theme);
-    }
-    settings.theme = theme;
-    localStorage.setItem('nsm_settings', JSON.stringify(settings));
-  }
-
-  let touchstartX = 0, touchendX = 0;
-  document.addEventListener('touchstart', e => { touchstartX = e.changedTouches[0].screenX; });
-  document.addEventListener('touchend', e => { touchendX = e.changedTouches[0].screenX; 
-    if (touchendX < touchstartX - 50) closeSidebar();
-    if (touchendX > touchstartX + 50) openSidebar();
-  });
-  function openSidebar() { document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebar-overlay').classList.add('open'); }
-  function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('open'); }
-
-  function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; closeSidebar(); showSettingsView('main'); }
-  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-  function showSettingsView(view) {
-    document.querySelectorAll('.settings-view').forEach(v => v.classList.remove('active'));
-    document.getElementById('settings-' + view).classList.add('active');
-    if (view === 'data') loadBrainsList();
-  }
-  
-  function saveSettings() {
-    settings.user = document.getElementById('settings-user').value || "default";
-    settings.url = document.getElementById('settings-url').value;
-    settings.model = document.getElementById('settings-model').value;
-    settings.key = document.getElementById('settings-key').value;
-    settings.pinEnabled = document.getElementById('settings-pin-enabled').value;
-    settings.pin = document.getElementById('settings-pin').value;
-    localStorage.setItem('nsm_settings', JSON.stringify(settings));
-    showToast("Settings Saved!");
-  }
-
-  function loadChatList(query = "") {
-    const list = document.getElementById('chat-list');
-    list.innerHTML = '';
-    Object.keys(chats).sort().reverse().forEach(id => {
-      const title = chats[id].title || "New Chat";
-      if (query && !title.toLowerCase().includes(query.toLowerCase())) return;
-      const item = document.createElement('div');
-      item.className = 'chat-item' + (id === currentChatId ? ' active' : '');
-      item.innerHTML = `<span onclick="switchChat('${id}')" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${title}</span>
-        <div class="chat-item-actions">
-          <button class="icon-btn" onclick="deleteChat('${id}', event)"><svg class="svg-icon-sm"><use href="#i-trash"/></svg></button>
-          <button class="icon-btn" onclick="shareChat('${id}', event)"><svg class="svg-icon-sm"><use href="#i-share"/></svg></button>
-          <button class="icon-btn" onclick="downloadChat('${id}', event)"><svg class="svg-icon-sm"><use href="#i-download"/></svg></button>
-        </div>`;
-      list.appendChild(item);
-    });
-  }
-  function switchChat(id) { currentChatId = id; renderChat(id); closeSidebar(); }
-  function startNewChat() { currentChatId = Date.now().toString(); chats[currentChatId] = { title: "New Chat", messages: [], updated_at: Date.now() }; localStorage.setItem('nsm_chats', JSON.stringify(chats)); renderChat(currentChatId); loadChatList(); }
-
-  function renderChat(id) {
-    const container = document.getElementById('chat-container');
-    container.innerHTML = '';
-    if (!chats[id] || chats[id].messages.length === 0) {
-      container.innerHTML = '<div class="msg nsm" style="align-self: center; max-width: 90%;">Hi! I\'m NSM VB. Talk to me, or teach me new words.</div>';
-    } else {
-      chats[id].messages.forEach((m, idx) => appendBubble(m.sender, m.text, idx));
-    }
-    container.scrollTop = container.scrollHeight;
-  }
-
-  function appendBubble(sender, text, index) {
-    const container = document.getElementById('chat-container');
-    const wrapper = document.createElement('div');
-    wrapper.className = `msg-wrapper ${sender}`;
-    const bubble = document.createElement('div');
-    bubble.className = 'msg';
-    bubble.innerText = text;
-    
-    const actions = document.createElement('div');
-    actions.className = 'msg-actions';
-    
-    if (sender === 'nsm') {
-      actions.innerHTML = `
-        <button onclick="copyText('${text.replace(/'/g, "\\'")}')"><svg class="svg-icon-sm"><use href="#i-copy"/></svg></button>
-        <button onclick="shareText('${text.replace(/'/g, "\\'")}')"><svg class="svg-icon-sm"><use href="#i-share"/></svg></button>
-        <button onclick="speakText('${text.replace(/'/g, "\\'")}', this)"><svg class="svg-icon-sm"><use href="#i-volume"/></svg></button>
-        <button onclick="retryResponse(${index})"><svg class="svg-icon-sm"><use href="#i-refresh"/></svg></button>
-      `;
-    } else {
-      actions.innerHTML = `
-        <button onclick="editMessage(${index}, this)"><svg class="svg-icon-sm"><use href="#i-edit"/></svg></button>
-        <button onclick="copyText('${text.replace(/'/g, "\\'")}')"><svg class="svg-icon-sm"><use href="#i-copy"/></svg></button>
-      `;
-    }
-    wrapper.appendChild(bubble);
-    wrapper.appendChild(actions);
-    container.appendChild(wrapper);
-    container.scrollTop = container.scrollHeight;
-  }
-
-  function copyText(t) { navigator.clipboard.writeText(t).then(() => showToast("Copied!")); }
-  function shareText(t) { if(navigator.share) navigator.share({text: t}); }
-  
-  let currentSpeechText = null;
-
-  function speakText(text, btn) {
-    // FIX: null-safe for auto-TTS (no button to update)
-    if (!btn) {
-      if (window.Android && typeof window.Android.speakText === 'function') {
-        window.Android.speakText(text);
-      } else if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-      }
-      return;
-    }
-    // Use Native Android TTS if available
-    if (window.Android && typeof window.Android.speakText === 'function') {
-      if (btn.innerText === '⏸️' || btn.innerHTML.includes('i-play')) {
-         // If already playing/paused, stop it
-         window.Android.stopTTS();
-         btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
-      } else {
-         window.Android.speakText(text);
-         btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
-      }
-      return;
-    }
-    
-    // Fallback for Browser
-    if (!('speechSynthesis' in window)) { showToast("TTS not supported"); return; }
-
-    // If clicking the same text that is currently speaking/paused
-    if (currentSpeechText === text) {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
-      } else if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.pause();
-        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-play"/></svg>';
-      }
-      return;
-    }
-
-    // Start new speech
-    window.speechSynthesis.cancel();
-    currentSpeechText = text;
-    
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 1.0;
-    utt.onend = () => {
-      if (currentSpeechText === text) {
-        btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-volume"/></svg>';
-        currentSpeechText = null;
-      }
-    };
-    
-    window.speechSynthesis.speak(utt);
-    btn.innerHTML = '<svg class="svg-icon-sm"><use href="#i-pause"/></svg>';
-  }
-
-  function editMessage(index, btn) {
-    const chat = chats[currentChatId];
-    const wrapper = btn.closest('.msg-wrapper');
-    const bubble = wrapper.querySelector('.msg');
-    const origText = chat.messages[index].text;
-    bubble.innerHTML = `<input type="text" class="edit-input" value="${origText}">
-      <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <button onclick="submitEdit(${index})" style="background: var(--accent); border: none; color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Send</button>
-        <button onclick="renderChat('${currentChatId}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">Cancel</button>
+function renderMessages() {
+  const container = document.getElementById("chat-container");
+  const chat = getCurrentChat();
+  if (!chat.messages.length) {
+    container.innerHTML = `
+      <div class="hero">
+        <div class="hero-orb">
+          <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1a3 3 0 0 1 2 5.2A4 4 0 0 1 16 19h-1v2a1 1 0 0 1-2 0v-2h-2v2a1 1 0 0 1-2 0v-2H8a4 4 0 0 1-2-6.8A3 3 0 0 1 8 7V6a4 4 0 0 1 4-4z"/></svg>
+        </div>
+        <h1>NSM VB v1.4</h1>
+        <p>NeuraSaMu Neuro-Symbolic Virtual Brain with role-bound hypergraph memory, proof-tracked reasoning, surgical feedback, and Samu Lab API support.</p>
+        <div class="chip-grid">
+          <button class="starter-chip" onclick="quickSend('Who are you and who created you?')">
+            <span>Identity</span>Who are you and who created you?
+          </button>
+          <button class="starter-chip" onclick="quickSend('A dog bit a man. Who bit the man?')">
+            <span>Role Binding Test</span>A dog bit a man. Who bit the man?
+          </button>
+          <button class="starter-chip" onclick="quickSend('Bird can fly. Penguin is a bird. Penguin cannot fly. Can penguin fly?')">
+            <span>Defeasible Reasoning</span>Bird can fly. Penguin is a bird. Penguin cannot fly. Can penguin fly?
+          </button>
+          <button class="starter-chip" onclick="quickSend('What did you recall last time?')">
+            <span>Episodic Meta-Memory</span>What did you recall last time?
+          </button>
+        </div>
       </div>`;
-    const input = bubble.querySelector('input');
-    input.focus();
-    input.onkeypress = (e) => {
-      if (e.key === 'Enter') submitEdit(index);
-    };
+    return;
   }
 
-  function submitEdit(index) {
-    const chat = chats[currentChatId];
-    const allUserBubbles = document.querySelectorAll('.msg-wrapper.user');
-    const wrapper = allUserBubbles[allUserBubbles.length - 1];
-    if (!wrapper) return;
-    const input = wrapper.querySelector('.edit-input');
-    if (!input) return;
-    const newText = input.value.trim();
-    if (!newText) return;
-    chat.messages[index].text = newText;
-    chat.messages = chat.messages.slice(0, index + 1);
-    localStorage.setItem('nsm_chats', JSON.stringify(chats));
-    renderChat(currentChatId);
-    sendToBrain(newText);
-  }
+  container.innerHTML = "";
+  chat.messages.forEach((m, idx) => container.appendChild(buildMessageNode(m, idx)));
+  container.scrollTop = container.scrollHeight;
+}
 
-  function retryResponse(index) {
-    const chat = chats[currentChatId];
-    if (index > 0) {
-      const userText = chat.messages[index-1].text;
-      chat.messages = chat.messages.slice(0, index);
-      localStorage.setItem('nsm_chats', JSON.stringify(chats));
-      renderChat(currentChatId);
-      sendToBrain(userText);
+function buildMessageNode(m, idx) {
+  const row = document.createElement("div");
+  row.className = "msg-row " + (m.role === "user" ? "user" : "nsm");
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+
+  if (m.role === "nsm") {
+    let badges = "";
+    if (m.mode) {
+      const confPct = typeof m.confidence === "number" ? ` · ${Math.round(m.confidence * 100)}%` : "";
+      badges += `<span class="badge ${escapeHtml(m.mode)}">${escapeHtml(m.mode)}${confPct}</span>`;
+    }
+    if (m.cortex_used) {
+      badges += `<span class="badge cortex">Samu Lab Cortex</span>`;
+    }
+    if (badges) {
+      bubble.innerHTML += `<div class="meta-badges">${badges}</div>`;
     }
   }
 
-  function toggleMenu(event) {
-    event.stopPropagation();
-    document.getElementById('header-menu').classList.toggle('open');
+  const textDiv = document.createElement("div");
+  textDiv.textContent = m.text;
+  bubble.appendChild(textDiv);
+
+  if (m.role === "nsm" && Array.isArray(m.proof_steps) && m.proof_steps.length > 0) {
+    const proofBox = document.createElement("div");
+    proofBox.className = "proof-box";
+    const pid = "proof_" + idx + "_" + (m.episode_id || "x");
+    proofBox.innerHTML = `
+      <button class="proof-toggle" onclick="toggleProof('${pid}', this)">▸ Proof Trace (${m.proof_steps.length})</button>
+      <ul class="proof-list" id="${pid}">
+        ${m.proof_steps.map(s => `<li>• ${escapeHtml(s)}</li>`).join("")}
+      </ul>`;
+    bubble.appendChild(proofBox);
   }
-  function closeMenu() {
-    document.getElementById('header-menu').classList.remove('open');
+
+  row.appendChild(bubble);
+
+  const actions = document.createElement("div");
+  actions.className = "msg-actions";
+  if (m.role === "user") {
+    actions.innerHTML = `
+      <button class="mini-btn" onclick="copyText(${idx})">Copy</button>
+      <button class="mini-btn" onclick="editAndResend(${idx})">Edit</button>`;
+  } else {
+    const upCls = m.voted === "up" ? "voted-up" : "";
+    const dnCls = m.voted === "down" ? "voted-down" : "";
+    actions.innerHTML = `
+      <button class="mini-btn ${upCls}" onclick="sendFeedback(${idx}, true, this)">👍 Good</button>
+      <button class="mini-btn ${dnCls}" onclick="sendFeedback(${idx}, false, this)">👎 Fix</button>
+      <button class="mini-btn" onclick="speakText(${idx})">🔊</button>
+      <button class="mini-btn" onclick="copyText(${idx})">Copy</button>
+      <button class="mini-btn" onclick="retryFrom(${idx})">Retry</button>`;
   }
-  document.addEventListener('click', function(e) {
-    const menu = document.getElementById('header-menu');
-    if (menu && menu.classList.contains('open') && !e.target.closest('.header-actions')) {
-      menu.classList.remove('open');
+  row.appendChild(actions);
+  return row;
+}
+
+function toggleProof(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const open = el.classList.toggle("open");
+  btn.textContent = (open ? "▾ " : "▸ ") + btn.textContent.slice(2);
+}
+
+function quickSend(txt) {
+  const input = document.getElementById("message-input");
+  input.value = txt;
+  sendMessage();
+}
+
+function handleSendClick() {
+  if (isSending && activeAbort) {
+    activeAbort.abort();
+    return;
+  }
+  sendMessage();
+}
+
+function setSendingUI(sending) {
+  isSending = sending;
+  const btn = document.getElementById("send-btn");
+  const icon = document.getElementById("send-icon");
+  if (sending) {
+    btn.classList.add("stop-mode");
+    icon.innerHTML = `<rect x="6" y="6" width="12" height="12" rx="2"/>`;
+  } else {
+    btn.classList.remove("stop-mode");
+    icon.innerHTML = `<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>`;
+  }
+}
+
+async function sendMessage(overrideText) {
+  const input = document.getElementById("message-input");
+  const text = (overrideText !== undefined ? overrideText : input.value).trim();
+  if (!text || isSending) return;
+
+  if (overrideText === undefined) {
+    input.value = "";
+    input.style.height = "44px";
+  }
+
+  const chat = getCurrentChat();
+  if (!chat.messages.length) {
+    chat.title = text.slice(0, 34) + (text.length > 34 ? "..." : "");
+  }
+  chat.messages.push({ role: "user", text });
+  persistChats();
+  renderChatList();
+  renderMessages();
+
+  // Typing bubble
+  const container = document.getElementById("chat-container");
+  const typingRow = document.createElement("div");
+  typingRow.className = "msg-row nsm";
+  typingRow.id = "typing-row";
+  typingRow.innerHTML = `<div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  container.appendChild(typingRow);
+  container.scrollTop = container.scrollHeight;
+
+  setSendingUI(true);
+  activeAbort = new AbortController();
+  const timeoutId = setTimeout(() => activeAbort.abort(), 35000);
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: activeAbort.signal,
+      body: JSON.stringify({
+        text,
+        user_id: activeBrain,
+        llm_url: settings.url || null,
+        llm_model: settings.model || null,
+        llm_key: settings.key || null
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Brain server error");
+
+    chat.messages.push({
+      role: "nsm",
+      text: data.response || "(empty response)",
+      mode: data.mode || "unknown",
+      confidence: data.confidence,
+      proof_steps: data.proof_steps || [],
+      episode_id: data.episode_id || null,
+      cortex_used: !!data.cortex_used,
+      voted: null
+    });
+    persistChats();
+    if (data.stats) updateHud(data.stats);
+    if (autoTTS && data.response) speakRaw(data.response);
+  } catch (err) {
+    const msg = err.name === "AbortError"
+      ? "Request cancelled."
+      : "Engine connection error: " + (err.message || err);
+    chat.messages.push({ role: "nsm", text: msg, mode: "unknown", confidence: 0, proof_steps: [] });
+    persistChats();
+  } finally {
+    clearTimeout(timeoutId);
+    activeAbort = null;
+    setSendingUI(false);
+    renderMessages();
+  }
+}
+
+async function sendFeedback(idx, positive) {
+  const chat = getCurrentChat();
+  const msg = chat.messages[idx];
+  if (!msg || msg.role !== "nsm") return;
+  try {
+    const res = await fetch("/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: activeBrain,
+        positive,
+        episode_id: msg.episode_id
+      })
+    });
+    const data = await res.json();
+    msg.voted = positive ? "up" : "down";
+    persistChats();
+    renderMessages();
+    showToast(data.message || (positive ? "Memory reinforced" : "Culprit link corrected"));
+  } catch {
+    showToast("Feedback failed");
+  }
+}
+
+async function triggerSleep() {
+  try {
+    const res = await fetch("/sleep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: activeBrain })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Sleep failed");
+    showToast(`Sleep done: +${data.schemas_created} schemas, ${data.pruned} pruned`);
+    refreshState();
+  } catch (e) {
+    showToast("Sleep error: " + e.message);
+  }
+}
+
+function copyText(idx) {
+  const m = getCurrentChat().messages[idx];
+  if (!m) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(m.text).then(() => showToast("Copied")).catch(() => showToast("Copy failed"));
+  } else {
+    showToast("Clipboard unavailable");
+  }
+}
+
+function editAndResend(idx) {
+  const chat = getCurrentChat();
+  const m = chat.messages[idx];
+  if (!m) return;
+  document.getElementById("message-input").value = m.text;
+  document.getElementById("message-input").focus();
+}
+
+function retryFrom(idx) {
+  const chat = getCurrentChat();
+  for (let i = idx - 1; i >= 0; i--) {
+    if (chat.messages[i].role === "user") {
+      sendMessage(chat.messages[i].text);
+      return;
     }
-  });
-
-  function deleteCurrentChat() { deleteChat(currentChatId, null); }
-  function shareCurrentChat() { shareChat(currentChatId, null); }
-  function downloadCurrentChat() { downloadChat(currentChatId, null); }
-
-  function deleteChat(id, e) {
-    if(e) e.stopPropagation();
-    if(!confirm("Delete chat?")) return;
-    delete chats[id]; localStorage.setItem('nsm_chats', JSON.stringify(chats));
-    if(id === currentChatId) startNewChat(); else loadChatList();
   }
-  function shareChat(id, e) {
-    if(e) e.stopPropagation();
-    const text = chats[id].messages.map(m => `${m.sender.toUpperCase()}: ${m.text}`).join('\n');
-    if(navigator.share) navigator.share({title: chats[id].title, text: text});
-  }
-  function downloadChat(id, e) {
-    if(e) e.stopPropagation();
-    const text = chats[id].messages.map(m => `${m.sender.toUpperCase()}: ${m.text}`).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], {type: 'text/plain'}));
-    a.download = `${chats[id].title}.txt`; a.click();
-  }
+}
 
-  function handleSendClick() { if (isGenerating) stopGeneration(); else sendMessage(); }
+function speakText(idx) {
+  const m = getCurrentChat().messages[idx];
+  if (m && m.text) speakRaw(m.text);
+}
 
-  function sendMessage() {
-    const input = document.getElementById('message-input');
-    const text = input.value.trim();
-    if(!text) return;
-    const chat = chats[currentChatId];
-    if (chat.messages.length === 0) chat.title = text.substring(0, 20);
-    chat.updated_at = Date.now();
-    chat.messages.push({ sender: 'user', text: text });
-    localStorage.setItem('nsm_chats', JSON.stringify(chats));
-    renderChat(currentChatId);
-    loadChatList();
-    input.value = '';
-    sendToBrain(text);
-  }
+function speakRaw(text) {
+  try {
+    if (window.Android && typeof window.Android.speakText === "function") {
+      window.Android.speakText(text);
+    } else if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    }
+  } catch {}
+}
 
-  async function sendToBrain(text) {
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
-    isGenerating = true;
-    const sendBtn = document.getElementById('send-btn');
-    sendBtn.innerHTML = '<svg class="svg-icon-lg"><use href="#i-stop"/></svg>';
-    sendBtn.classList.add('stop');
-
-    const container = document.getElementById('chat-container');
-    const typing = document.createElement('div');
-    typing.className = 'typing-indicator';
-    typing.innerHTML = '<span></span><span></span><span></span>';
-    container.appendChild(typing);
-    container.scrollTop = container.scrollHeight;
-
-    currentController = new AbortController();
-
+function toggleAutoTTS() {
+  autoTTS = !autoTTS;
+  safeSet(STORAGE_KEYS.tts, autoTTS ? "1" : "0");
+  document.getElementById("auto-tts-btn").classList.toggle("active", autoTTS);
+  if (!autoTTS) {
     try {
-      const res = await fetch('/chat', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ text: text, user_id: settings.user, llm_url: settings.url, llm_model: settings.model, llm_key: settings.key }),
-        signal: currentController.signal
-      });
-      if (!res.ok) {
-        let errBody = "";
-        try { errBody = await res.text(); } catch(e) {}
-        throw new Error("Server " + res.status + ": " + errBody.substring(0, 150));
-      }
+      if (window.Android && window.Android.stopTTS) window.Android.stopTTS();
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    } catch {}
+  }
+  showToast(autoTTS ? "Auto Voice ON" : "Auto Voice OFF");
+}
+
+function updateHud(st) {
+  if (!st) return;
+  const f = st.frames ?? 0;
+  const e = st.episodes ?? 0;
+  const sc = st.schemas ?? 0;
+  const s = st.senses ?? 0;
+  document.getElementById("hud-stats").textContent = `${f} frames · ${e} episodes · ${sc} schemas`;
+  const elF = document.getElementById("st-frames");
+  if (elF) {
+    elF.textContent = f;
+    document.getElementById("st-senses").textContent = s;
+    document.getElementById("st-episodes").textContent = e;
+    document.getElementById("st-schemas").textContent = sc;
+  }
+}
+
+async function refreshState() {
+  try {
+    const res = await fetch("/state?user_id=" + encodeURIComponent(activeBrain));
+    if (res.ok) updateHud(await res.json());
+  } catch {}
+}
+
+async function loadBrainsList() {
+  const listEl = document.getElementById("brains-list");
+  let brains = [activeBrain];
+  try {
+    const res = await fetch("/brains");
+    if (res.ok) {
       const data = await res.json();
-      if (container.contains(typing)) container.removeChild(typing);
-      const chat = chats[currentChatId];
-      chat.messages.push({ sender: 'nsm', text: data.response });
-      localStorage.setItem('nsm_chats', JSON.stringify(chats));
-      renderChat(currentChatId);
-      
-      if (settings.autoTTS) {
-        speakText(data.response, null);
-      }
-    } catch (err) {
-      if (container.contains(typing)) container.removeChild(typing);
-      let errorMsg = "Error connecting to brain.";
-      if (err.name === 'AbortError') {
-        errorMsg = "Generation stopped by user.";
-      } else if (err.message) {
-        errorMsg = "Error: " + err.message;
-      }
-      appendBubble('nsm', errorMsg, chats[currentChatId].messages.length);
-    } finally {
-      isGenerating = false;
-      sendBtn.innerHTML = '<svg class="svg-icon-lg"><use href="#i-send"/></svg>';
-      sendBtn.classList.remove('stop');
-      currentController = null;
+      brains = Array.isArray(data.brains) && data.brains.length ? data.brains : ["default"];
     }
-  }
-  function stopGeneration() { if (currentController) currentController.abort(); }
+  } catch {}
+  if (!brains.includes(activeBrain)) brains.unshift(activeBrain);
 
-  // ===== BRAIN MANAGER FUNCTIONS (added later) =====
-  async function loadBrainsList(query = '') {
-    const list = document.getElementById('brains-list');
-    const activeName = document.getElementById('active-brain-name');
-    if (!list) return;
-    if (activeName) activeName.innerText = settings.user || 'default';
-    
-    try {
-      const res = await fetch('/brains');
-      const data = await res.json();
-      let brains = data.brains || [];
-      
-      if (query) {
-        brains = brains.filter(b => b.toLowerCase().includes(query.toLowerCase()));
-      }
-      
-      if (brains.length === 0) {
-        list.innerHTML = '<div style="color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px;">No brains found</div>';
-        return;
-      }
-      
-      list.innerHTML = brains.map(brain => {
-        const isActive = brain === settings.user;
-        return '<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ' + (isActive ? 'var(--surface2)' : 'transparent') + '; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;">' +
-          '<span style="font-size: 14px; font-weight: ' + (isActive ? 'bold' : 'normal') + '; color: ' + (isActive ? 'var(--accent)' : 'var(--text)') + ';">' + brain + (isActive ? ' (active)' : '') + '</span>' +
-          '<div style="display: flex; gap: 6px;">' +
-          (!isActive ? '<button onclick="switchBrain(\'' + brain + '\')" style="background: var(--accent); color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Load</button>' : '') +
-          '<button onclick="deleteBrain(\'' + brain + '\')" style="background: #8b2e2e; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Delete</button>' +
-          '</div></div>';
-      }).join('');
-    } catch(e) {
-      list.innerHTML = '<div style="color: #8b2e2e; font-size: 13px; text-align: center; padding: 20px;">Failed to load brains: ' + e.message + '</div>';
+  listEl.innerHTML = brains.map(b => `
+    <div class="list-item ${b === activeBrain ? "active" : ""}" onclick="switchBrain('${escapeHtml(b)}')">
+      <span class="list-item-title">🧠 ${escapeHtml(b)}</span>
+      ${b !== "default" ? `<button class="mini-btn" onclick="event.stopPropagation(); deleteBrain('${escapeHtml(b)}')">✕</button>` : ""}
+    </div>`).join("");
+}
+
+function switchBrain(name) {
+  activeBrain = name;
+  safeSet(STORAGE_KEYS.brain, name);
+  document.getElementById("active-brain-name").textContent = name;
+  currentChatId = null;
+  renderChatList();
+  renderMessages();
+  loadBrainsList();
+  refreshState();
+  closeSidebar();
+  showToast("Switched brain: " + name);
+}
+
+function createNewBrain() {
+  const inp = document.getElementById("new-brain-name");
+  const name = inp.value.trim().replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 32);
+  if (!name) return showToast("Enter a brain name");
+  inp.value = "";
+  switchBrain(name);
+}
+
+async function deleteBrain(name) {
+  if (!confirm(`Delete brain "${name}" and its memory?`)) return;
+  try {
+    await fetch("/delete_brain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: name })
+    });
+    delete allChats[name];
+    persistChats();
+    if (activeBrain === name) activeBrain = "default";
+    switchBrain(activeBrain);
+  } catch {
+    showToast("Failed to delete brain");
+  }
+}
+
+function renderChatList() {
+  const listEl = document.getElementById("chat-list");
+  const chats = getBrainChats();
+  listEl.innerHTML = chats.map(c => `
+    <div class="list-item ${c.id === currentChatId ? "active" : ""}" onclick="switchChat('${c.id}')">
+      <span class="list-item-title">${escapeHtml(c.title || "Session")}</span>
+      <button class="mini-btn" onclick="event.stopPropagation(); deleteChat('${c.id}')">✕</button>
+    </div>`).join("");
+}
+
+function switchChat(id) {
+  currentChatId = id;
+  renderChatList();
+  renderMessages();
+  closeSidebar();
+}
+
+function deleteChat(id) {
+  allChats[activeBrain] = getBrainChats().filter(c => c.id !== id);
+  if (currentChatId === id) currentChatId = null;
+  persistChats();
+  renderChatList();
+  renderMessages();
+}
+
+function openSidebar() {
+  loadBrainsList();
+  renderChatList();
+  document.getElementById("sidebar").classList.add("open");
+  document.getElementById("sidebar-overlay").classList.add("open");
+}
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+  document.getElementById("sidebar-overlay").classList.remove("open");
+}
+
+function openSettings() {
+  document.getElementById("settings-url").value = settings.url || "";
+  document.getElementById("settings-model").value = settings.model || "";
+  document.getElementById("settings-key").value = settings.key || "";
+  document.getElementById("settings-theme").value = settings.theme || "dark";
+  document.getElementById("settings-pin").value = settings.pin || "";
+  document.getElementById("test-llm-result").className = "status-box";
+  document.getElementById("import-status").className = "status-box";
+  refreshState();
+  document.getElementById("settings-modal").classList.add("open");
+}
+function closeModal() {
+  document.getElementById("settings-modal").classList.remove("open");
+}
+function switchTab(id, btn) {
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  btn.classList.add("active");
+}
+
+function saveSettings() {
+  settings.url = document.getElementById("settings-url").value.trim();
+  settings.model = document.getElementById("settings-model").value.trim();
+  settings.key = document.getElementById("settings-key").value.trim();
+  safeSet(STORAGE_KEYS.settings, JSON.stringify(settings));
+  showToast(settings.url ? "Samu Lab API saved" : "Switched to 100% offline mode");
+}
+
+function saveGeneralSettings() {
+  settings.theme = document.getElementById("settings-theme").value;
+  settings.pin = document.getElementById("settings-pin").value.trim();
+  applyTheme(settings.theme);
+  safeSet(STORAGE_KEYS.settings, JSON.stringify(settings));
+  showToast("Settings saved");
+}
+
+async function testLLMConnection() {
+  saveSettings();
+  const box = document.getElementById("test-llm-result");
+  box.className = "status-box ok";
+  box.style.color = "var(--text-dim)";
+  box.style.borderColor = "var(--border)";
+  box.textContent = "Testing connection...";
+  try {
+    const res = await fetch("/test_llm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        llm_url: settings.url,
+        llm_model: settings.model,
+        llm_key: settings.key
+      })
+    });
+    const data = await res.json();
+    box.style.color = "";
+    box.style.borderColor = "";
+    if (data.ok) {
+      box.className = "status-box ok";
+      box.textContent = `Connected (${data.latency_ms}ms) — Model replied: "${data.response}"`;
+    } else {
+      box.className = "status-box err";
+      box.textContent = `Failed: ${data.error || "Unknown error"}`;
     }
+  } catch (e) {
+    box.className = "status-box err";
+    box.textContent = "Network error: " + e.message;
   }
+}
 
-  async function switchBrain(brainId) {
-    settings.user = brainId;
-    localStorage.setItem('nsm_settings', JSON.stringify(settings));
-    const userInput = document.getElementById('settings-user');
-    if (userInput) userInput.value = brainId;
-    showToast('Switched to brain: ' + brainId);
-    loadBrainsList();
-  }
-
-  async function deleteBrain(brainId) {
-    if (!confirm('Delete brain "' + brainId + '"? This will delete all its memory forever.')) return;
-    try {
-      await fetch('/delete_brain', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ user_id: brainId })
-      });
-      showToast('Deleted: ' + brainId);
-      
-      // If we deleted the active brain, switch to default
-      if (brainId === settings.user) {
-        settings.user = 'default';
-        localStorage.setItem('nsm_settings', JSON.stringify(settings));
-        document.getElementById('settings-user').value = 'default';
-      }
-      loadBrainsList();
-    } catch(e) {
-      showToast('Failed to delete: ' + e.message);
+async function exportMemory() {
+  try {
+    const res = await fetch("/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: activeBrain })
+    });
+    const payload = await res.json();
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const fname = `NSM_Brain_${activeBrain}_v1.4.json`;
+    if (window.Android && typeof window.Android.shareBrain === "function") {
+      window.Android.shareBrain(jsonStr, fname);
+      showToast("Sharing brain file...");
+    } else {
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast("Brain exported");
     }
+  } catch (e) {
+    showToast("Export failed: " + e.message);
   }
+}
 
-  async function importMemory(event) {
-    const files = event.target.files;
-    if(!files || files.length === 0) return;
-    
-    const statusBox = document.getElementById('import-status');
-    const textSpan = document.getElementById('import-status-text');
-    if (statusBox) {
-      statusBox.style.display = 'block';
-      statusBox.style.background = 'var(--surface2)';
-      statusBox.style.color = 'var(--text)';
-      textSpan.innerText = 'Importing ' + files.length + ' file(s) into "' + (settings.user || 'default') + '"...';
-    }
-
-    let successCount = 0, failCount = 0, errors = [];
-    let lastImportedBrain = "";
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileData = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.readAsText(file);
-      });
-      
-      // Create a new brain ID based on the filename
-      let brainName = file.name.replace('.json', '').replace('NSM_Brain_', '').replace('NSM_Memory_', '');
-      if (!brainName) brainName = "imported_brain_" + Date.now();
-
-      try {
-        const brainData = JSON.parse(fileData);
-        const res = await fetch('/import', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ user_id: (settings.user || 'default').trim() || 'default', brain_data: brainData, mode: 'merge' })
-        });
-        const result = await res.json();
-        if (result.ok) {
-          successCount++;
-          lastImportedBrain = brainName;
-        } else {
-          failCount++;
-          errors.push(file.name + ': ' + (result.error || 'Unknown'));
-        }
-      } catch(e) {
-        failCount++;
-        errors.push(file.name + ': ' + e.message);
-      }
-    }
-
-    if (statusBox) {
-      if (successCount > 0) {
-        statusBox.style.background = '#238636';
-        statusBox.style.color = 'white';
-        textSpan.innerHTML = '✅ Merged ' + successCount + ' file(s) into brain: "' + (settings.user || 'default') + '"';
-        
-        // FIX: no auto-switch - preserve current active brain
-        
-        setTimeout(() => loadBrainsList(), 500);
-      } else {
-        statusBox.style.background = '#8b2e2e';
-        statusBox.style.color = 'white';
-        textSpan.innerHTML = '❌ Import failed:<br>' + (errors.length > 0 ? errors.join('<br>') : 'Unknown error');
-      }
-    }
-    event.target.value = '';
+async function importMemory(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = "";
+  if (!file) return;
+  const statusBox = document.getElementById("import-status");
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const mode = document.getElementById("import-mode").value;
+    const res = await fetch("/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: activeBrain, brain_data: parsed, mode })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Import failed");
+    statusBox.className = "status-box ok";
+    statusBox.textContent = data.message || "Brain imported successfully.";
+    refreshState();
+    showToast("Brain imported");
+  } catch (e) {
+    statusBox.className = "status-box err";
+    statusBox.textContent = "Import error: " + e.message;
   }
+}
 
-
-  async function createNewBrain() {
-    const name = document.getElementById('new-brain-name').value.trim();
-    if (!name) { showToast("Enter a brain name"); return; }
-    
-    // Switch to this new brain
-    settings.user = name;
-    localStorage.setItem('nsm_settings', JSON.stringify(settings));
-    document.getElementById('settings-user').value = name;
-    document.getElementById('active-brain-name').innerText = name;
-    
-    // Create an empty brain in DB
-    try {
-      await fetch('/import', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ user_id: name, brain_data: { version: 1, definitions: {}, relations: {}, lexicon: {}, episodes: [], facts: {}, affect: {drives:{},hormones:{}} }, mode: 'replace' })
-      });
-      showToast("Created & Switched to: " + name);
-      document.getElementById('new-brain-name').value = '';
-      loadBrainsList();
-    } catch(e) { showToast("Error creating brain"); }
+async function resetCurrentBrain() {
+  if (!confirm(`Clear all learned memory in "${activeBrain}"? Core NeuraSaMu identity stays intact.`)) return;
+  try {
+    await fetch("/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: activeBrain })
+    });
+    refreshState();
+    showToast("Brain reset complete");
+  } catch {
+    showToast("Reset failed");
   }
+}
 
-  async function exportMemory() {
-    showToast("Exporting brain...");
-    try {
-      const res = await fetch('/export', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ user_id: settings.user })
-      });
-      if (!res.ok) throw new Error("Server error " + res.status);
-      
-      const data = await res.json();
-      const jsonStr = JSON.stringify(data, null, 2);
-      const fileName = `NSM_Memory_${settings.user}.json`;
-
-      // Use Native Android Share if available
-      if (window.Android && typeof window.Android.shareBrain === 'function') {
-        window.Android.shareBrain(jsonStr, fileName);
-        showToast("Opening Share Menu...");
-      } else {
-        // Fallback for Browser
-        const blob = new Blob([jsonStr], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; 
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click(); 
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast("Exported successfully!");
-      }
-    } catch(e) { 
-      showToast("Export failed: " + e.message); 
-    }
+function unlockPin() {
+  const val = document.getElementById("pin-input").value.trim();
+  if (val === settings.pin) {
+    document.getElementById("pin-screen").classList.remove("open");
+    document.getElementById("pin-error").textContent = "";
+  } else {
+    document.getElementById("pin-error").textContent = "Incorrect PIN";
   }
+}
 
-  async function loadSampleBrain() {
-    showToast("Generating Salman Brain...");
-    const sampleBrain = {
-      "version": 1, "turn": 5, "max_depth": 5,
-      "definitions": {
-        "ai": "Artificial Intelligence - machines that simulate human intelligence",
-        "scientist": "a person who studies or practices science",
-        "researcher": "a person who conducts research and investigations",
-        "human": "a man, woman, or child of the species Homo sapiens",
-        "code": "instructions written for a computer to execute"
-      },
-      "facts": { "name": "Salman", "profession": "AI Scientist and Researcher", "age": 25 },
-      "relations": {
-        "IS|salman": {
-          "human": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"},
-          "researcher": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"},
-          "scientist": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"}
-        },
-        "CAN|salman": {
-          "code": {"count": 1, "first_seen": 1730400000.0, "last_seen": 1730400000.0, "superseded": false, "source": "user"}
-        }
-      },
-      "lexicon": { "salman": {"count": 1, "contexts": []}, "ai": {"count": 1, "contexts": []} },
-      "episodes": [],
-      "affect": {"drives": {}, "hormones": {}}
-    };
-    
-    try {
-      const res = await fetch('/import', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ user_id: 'salman', brain_data: sampleBrain, mode: 'replace' })
-      });
-      const result = await res.json();
-      if (result.ok) {
-        showToast("Salman Brain Loaded! Switching...");
-        settings.user = 'salman';
-        localStorage.setItem('nsm_settings', JSON.stringify(settings));
-        loadBrainsList();
-        document.getElementById('active-brain-name').innerText = 'salman';
-      } else {
-        showToast("Failed: " + result.error);
-      }
-    } catch(e) { showToast("Error: " + e.message); }
+// Auto-grow textarea & Enter to send
+const msgInput = document.getElementById("message-input");
+msgInput.addEventListener("input", () => {
+  msgInput.style.height = "44px";
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + "px";
+});
+msgInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
   }
+});
 
-  init();
+// Init
+(function init() {
+  applyTheme(settings.theme || "dark");
+  document.getElementById("active-brain-name").textContent = activeBrain;
+  document.getElementById("auto-tts-btn").classList.toggle("active", autoTTS);
+  if (settings.pin) {
+    document.getElementById("pin-screen").classList.add("open");
+  }
+  renderMessages();
+  refreshState();
+})();
 </script>
 </body>
 </html>

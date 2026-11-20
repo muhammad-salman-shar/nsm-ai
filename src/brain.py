@@ -1,1242 +1,1166 @@
+"""NSM VB v1.4 - NeuraSaMu Neuro-Symbolic Cognitive Brain.
+
+Core Architecture:
+1. Typed Role-Filler Hypergraph (binding-safe, sense-disambiguated, Bayesian confidence).
+2. Two-Tier Fast RAM Vector Index + Cold SQLite Persistence.
+3. Proof-Tracked Defeasible Reasoning + Surgical Credit Assignment.
+4. Episodic Recall Trace + Offline Sleep Consolidation Engine.
+5. Optional Samu Lab / OpenAI-Compatible API Language Cortex.
+"""
+
 import re
-from src.affect import Affect
-from src.personality import Personality
-from src.memory import Lexicon, EpisodicMemory
-from src.perceptron import Perceptron, TRAINING_DATA
-from src.language import Language
-from src.relations import (extract, parse_query, RelationStore,
-                           CORRECTION_MARKERS, NOUN_DETERMINERS, STOP_TAIL, AUX_VERBS,
-                           _pick_head_noun)
-from src import persistence
-from src.facts import extract as extract_fact, query as fact_query, format_answer, FactStore
-from src.producer import produce_svo
-from src.composer import compose_object
-from src.reasoner import infer_relation_full
-from src.parser_v2 import parse_to_meaning
-from src.realizer import realize, get_article
-from src.llm_teacher import improve_language
-from src.patterns import is_svo_verb
-from src.morphology import conjugate_verb, swap_pronouns
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
-MATH_WORDS = {"zero":0,"one":1,"two":2,"three":3,"four":4,
-              "five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
+from src import cortex_api
+from src.episodic import EpisodicMemory
+from src.hypergraph import TypedHypergraph, normalize_entity
 
-DEFAULT_MAX_DEPTH = 5
-HARD_MAX_DEPTH = 8
-
-_GRAMMAR = {
-    "a","an","the","is","are","am","was","were","be","been","being",
-    "i","you","we","they","he","she","it","me","my","your","our","their","its",
-    "to","of","in","on","at","for","with","by","from","about","into",
-    "and","or","but","if","then","so","because","as","than","also","too",
-    "do","does","did","done","have","has","had",
-    "will","would","can","could","should","may","might","must","shall",
-    "what","who","why","how","when","where","which","whose",
-    "this","that","these","those","there","here",
-    "not","no","yes","ok","okay","sure","please",
-    "hi","hello","hey","bye","goodbye","greetings",
-    "thanks","thank","nevermind","never","skip","cancel",
-    "forget","stop","quit","whatever","nothing","later","fine",
-    "one","two","three","four","five","six","seven","eight","nine","ten","zero",
-    "plus","minus","times","multiplied","divided",
+# Irregular verb normalization map for clean role-bound SVO matching
+_VERB_LEMMA = {
+    "bit": "bite", "bites": "bite", "bitten": "bite",
+    "ate": "eat", "eats": "eat", "eaten": "eat",
+    "chased": "chase", "chases": "chase",
+    "built": "build", "builds": "build",
+    "created": "create", "creates": "create",
+    "made": "make", "makes": "make",
+    "wrote": "write", "writes": "write", "written": "write",
+    "killed": "kill", "kills": "kill",
+    "helped": "help", "helps": "help",
+    "loved": "love", "loves": "love",
+    "hated": "hate", "hates": "hate",
+    "liked": "like", "likes": "like",
+    "saw": "see", "sees": "see", "seen": "see",
+    "hit": "hit", "hits": "hit",
+    "taught": "teach", "teaches": "teach",
+    "broke": "break", "breaks": "break", "broken": "break",
+    "fixed": "fix", "fixes": "fix",
 }
 
-_COMMON_VERBS = {
-    "saw","see","seen","look","looked","looks",
-    "go","went","gone","goes","come","came","comes",
-    "say","said","says","tell","told","tells",
-    "make","made","makes","get","got","gets",
-    "take","took","takes","give","gave","gives",
-    "know","knew","knows","think","thought","thinks",
-    "feel","felt","feels","find","found","finds",
-    "ask","asked","asks","work","worked","works",
-    "play","played","plays","want","wanted","wants",
-    "need","needed","needs","help","helped","helps",
-    "put","use","used","try","tried","call","called",
-    "eat","ate","drink","drank","sleep","slept",
-    "live","lived","learn","learned","understand","understood",
-    "remember","remembered","forget","forgot","show","showed",
-    "bring","brought","buy","bought","sell","sold",
-    "build","built","break","broke","start","started",
-    "stop","stopped","open","opened","close","closed",
-    "sit","sat","stand","stood","wait","waited",
-    "meet","met","carry","carried","hold","held",
-    "hit","cut","kill","killed","die","died",
-    "win","won","lose","lost","write","wrote",
-    "read","sing","sang","dance","danced","jump","jumped",
-    "fly","flew","swim","swam","drive","drove","ride","rode",
-    "climb","climbed","fall","fell","laugh","laughed",
-    "cry","cried","smile","smiled","hope","hoped",
-    "wish","wished","decide","decided","explain","explained",
-    "means","mean","meaning","meant","known",
-    "define","described","describe","explain",
-    "actually","wrong","correction","instead","alright",
-}
+_GREETINGS = frozenset({
+    "hi", "hello", "hey", "yo", "hola", "salam", "assalam", "assalamualaikum",
+    "good morning", "good evening", "good afternoon", "gm", "sup",
+})
 
-_QUESTION_STARTERS = {
-    "what","whats","who","whos","where","wheres","when","whens","why","whys","how","hows","which","whose",
-    "tell","explain","define",
-    "do","does","did","can","could","will","would","should",
-    "is","are","was","were","have","has","had","may","might","must",
-}
+_NEG_FEEDBACK_PHRASES = (
+    "that's wrong", "that is wrong", "you are wrong", "wrong answer",
+    "incorrect", "galat", "nope wrong", "no that's wrong", "not right",
+    "bad answer", "false",
+)
 
-def _build_stopwords():
-    words = set(_GRAMMAR) | set(_COMMON_VERBS)
-    words.update(["alive", "dead", "awake", "asleep"])
-    for text, _ in TRAINING_DATA:
-        for w in re.findall(r"[a-z]+", text.lower()):
-            words.add(w)
-    return words
+_POS_FEEDBACK_PHRASES = (
+    "good job", "correct", "that's right", "that is right", "exact",
+    "spot on", "sahi", "well done", "nice answer", "perfect",
+)
 
-STOPWORDS = _build_stopwords()
-
-FUNCTION_WORDS = {
-    "i","you","we","they","he","she","it","me","us","them",
-    "my","your","our","their","his","her","its",
-    "am","is","are","was","were","be","been","being",
-    "a","an","the","and","or","but",
-    "do","does","did","have","has","had",
-    "to","of","in","on","at","for","with","by","from",
-    "this","that","these","those",
-    "not","no","yes","ok","okay",
-    "what","who","when","where","why","how","which",
-    "like","love","want","need","know","think","feel","said",
-}
-
-def _content_words(text):
-    return {w for w in _words(text) if w not in FUNCTION_WORDS and len(w) >= 3}
-
-_CANCEL_WORDS = {
-    "hi","hello","hey","greetings","yo","sup","bye","goodbye",
-    "thanks","thank","ok","okay","yes","no","nevermind","never",
-    "skip","cancel","forget","stop","quit","whatever","nothing",
-    "later","fine",
-}
-
-def _is_cancel_or_greeting(text):
-    words = _words(text)
-    if not words:
-        return False
-    if len(words) == 1 and words[0] in _CANCEL_WORDS:
-        return True
-    if len(words) <= 2 and all(w in _CANCEL_WORDS for w in words):
-        return True
-    return False
-
-_CANCEL_WORDS = {
-    "hi","hello","hey","greetings","yo","sup","bye","goodbye",
-    "thanks","thank","ok","okay","yes","no","nevermind","never",
-    "skip","cancel","forget","stop","quit","whatever","nothing",
-    "later","fine",
-}
-
-def _is_cancel_or_greeting(text):
-    words = _words(text)
-    if not words:
-        return False
-    if len(words) == 1 and words[0] in _CANCEL_WORDS:
-        return True
-    if len(words) <= 2 and all(w in _CANCEL_WORDS for w in words):
-        return True
-    return False
+_SELF_TRIGGERS = (
+    "who are you", "what are you", "your name", "who made you",
+    "who created you", "who built you", "about yourself", "tell me about you",
+    "what is nsm", "who is your creator", "who is your founder",
+    "what is neurasamu", "tell me about neurasamu",
+)
 
 
-def _words(text):
-    return re.findall(r"[a-z]+", text.lower())
+def _canon_verb(verb: str) -> str:
+    v = normalize_entity(verb)
+    if v in _VERB_LEMMA:
+        return _VERB_LEMMA[v]
+    if len(v) > 4 and v.endswith("ed"):
+        return v[:-2]
+    if len(v) > 3 and v.endswith("s") and not v.endswith("ss"):
+        return v[:-1]
+    return v
 
 
-def _to_int(tok):
-    return int(tok) if tok.isdigit() else MATH_WORDS.get(tok)
-
-
-WH_WORDS = {"what","whats","who","whos","where","wheres","when","whens","why","whys","how","hows","which","whose"}
-def _is_question_text(text):
-    words = _words(text)
-    if not words: return False
-    if text.strip().endswith("?"): return True
-    if words[0] in _QUESTION_STARTERS: return True
-    has_wh = any(w in WH_WORDS for w in words)
-    has_aux = any(w in AUX_VERBS or w in ("do", "does", "did") for w in words)
-    if has_wh and has_aux and words[0] != "i":
-        return True
-    return False
+def _clean_phrase(s: str) -> str:
+    s = re.sub(r"\s+", " ", (s or "").strip())
+    s = s.strip(" .,!?;:\"'`")
+    # Strip leading articles for clean canonical entities
+    s = re.sub(r"^(?:a|an|the)\s+", "", s, flags=re.IGNORECASE)
+    return s.strip()
 
 
 class Brain:
-    def __init__(self, perceptron_path="src/perceptron.npz",
-                 max_depth=DEFAULT_MAX_DEPTH,
-                 auto_save_path=None):
-        self.affect = Affect()
-        self.personality = Personality
-        self.lexicon = Lexicon()
-        self.episodic = EpisodicMemory()
-        self.perceptron = Perceptron()
-        self.lang = Language(seed=7)
-        self.relations = RelationStore()
-        self.fact_store = FactStore()
-        self.meanings = {}
-        self.max_depth = min(int(max_depth), HARD_MAX_DEPTH)
-        self._boot_perceptron(perceptron_path)
-        self._seed_lexicon("data/stimuli.txt")
-        self.turn = 0
-        self.pending = None
-        self.definitions = {}
-        self.ask_depth = 0
-        self.asked_words = set()
-        self.pending_feedback = None
-        self.qa_pairs = []
-        self.auto_save_path = auto_save_path
-        if auto_save_path:
-            persistence.load(self, auto_save_path)
-        self._seed_self_knowledge()
+    """NSM VB v1.4 cognitive engine."""
 
-    def _seed_self_knowledge(self):
-        """Injects built-in knowledge about NeuraSaMu and NSM."""
-        self.definitions["nsm"] = "NSM (NeuraSaMu Virtual Brain) is a neuro-symbolic AI that learns offline on your device. Built by NeuraSaMu."
-        self.definitions["nsm vb"] = "NSM VB is a local-first cognitive architecture by NeuraSaMu. It is a virtual brain that learns from conversation."
-        self.definitions["neurasamu"] = "NeuraSaMu is an AI research and development venture founded by Muhammad Salman Shar in September 2023, dedicated to building autonomous cognitive architectures and functional AGI."
-        self.definitions["muhammad salman"] = "Muhammad Salman Shar (also known as Akira), born May 25, 2007, is an AI Scientist, Theoretical Visionary, Polymath, and CEO/Founder of NeuraSaMu from Khairpur, Sindh, Pakistan."
-        self.definitions["akira"] = self.definitions["muhammad salman"]
-        self.definitions["salman"] = self.definitions["muhammad salman"]
-        
-        self.relations.add("BUILT_BY", "nsm", "neurasamu")
-        self.relations.add("FOUNDED_BY", "neurasamu", "muhammad salman")
-        self.relations.add("FOUNDED_BY", "neurasamu", "salman")
-        self.relations.add("IS", "neurasamu", "company")
-        self.relations.add("IS", "nsm", "ai")
+    VERSION = "1.4"
 
-    def _extract_target_from_question(self, q):
-        """Extracts the target entity from a question, checking up to 3-grams."""
-        qw = {"what", "whats", "who", "whos", "where", "wheres", "tell", "me", "about", "define", "explain", "is", "are", "the", "a", "an", "of", "does", "do", "mean", "meaning", "know", "you", "can", "could", "would", "should"}
-        content = [w for w in q if w not in qw]
-        if not content:
-            return None
-        for n in range(min(4, len(content)), 0, -1):
-            for i in range(len(content) - n + 1):
-                phrase = " ".join(content[i:i+n])
-                if phrase in self.definitions or phrase in self.fact_store.facts or any(s == phrase for (_, s) in self.relations.relations.keys()):
-                    return phrase
-        return content[-1]
+    def __init__(self, seed_core: bool = True):
+        self.version = self.VERSION
+        self.hypergraph = TypedHypergraph(max_hot_frames=5000)
+        self.episodic = EpisodicMemory(max_raw_episodes=180)
+        self.profile: Dict[str, str] = {}
+        self.created_at: float = time.time()
+        self.updated_at: float = self.created_at
+        self.turn_count: int = 0
+        if seed_core:
+            self._seed_core_knowledge()
 
-    def _boot_perceptron(self, path):
-        try:
-            self.perceptron.load(path)
-        except (FileNotFoundError, OSError):
-            self.perceptron.train(TRAINING_DATA, epochs=300)
+    def _seed_core_knowledge(self) -> None:
+        """Seed immutable core NeuraSaMu & NSM VB v1.4 identity knowledge."""
+        core_facts = [
+            ("IS_A", "nsm vb", "neuro-symbolic virtual brain", "", 1, "NSM VB is a neuro-symbolic virtual brain built by NeuraSaMu."),
+            ("DEFINED_AS", "nsm vb", "version 1.4 cognitive architecture with typed hypergraph memory, episodic recall trace, surgical credit assignment, and sleep consolidation", "", 1, "NSM VB v1.4 architecture overview."),
+            ("CREATED", "muhammad salman shar", "nsm vb", "created", 1, "Muhammad Salman Shar created NSM VB."),
+            ("CREATED", "muhammad salman shar", "neurasamu", "founded", 1, "Muhammad Salman Shar founded NeuraSaMu."),
+            ("IS_A", "muhammad salman shar", "founder of neurasamu and creator of nsm vb", "", 1, "Muhammad Salman Shar (Salman / Akira) is the founder of NeuraSaMu."),
+            ("IS_A", "neurasamu", "independent ai research and software development lab", "", 1, "NeuraSaMu is an independent AI research and software lab at neurasamu.com."),
+            ("HAS", "neurasamu", "official website neurasamu.com", "", 1, "NeuraSaMu website is neurasamu.com."),
+            ("CAN", "nsm vb", "learn role-bound facts, reason with proof traces, recall past episodes, and consolidate memory offline", "", 1, "NSM VB core capabilities."),
+        ]
+        for rel, ag, pat, act, pol, raw in core_facts:
             try:
-                self.perceptron.save(path)
-            except OSError:
+                self.hypergraph.add_frame(
+                    relation=rel,
+                    agent=ag,
+                    patient=pat,
+                    action=act,
+                    polarity=pol,
+                    source="core",
+                    raw_text=raw,
+                    confidence_boost=1.0,
+                )
+            except ValueError:
                 pass
 
-    def _seed_lexicon(self, path):
-        try:
-            with open(path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        self.lexicon.see(parts[0], parts[1:])
-        except FileNotFoundError:
-            pass
-
-    def _try_math(self, text):
-        t = text.lower()
-        t = t.replace("plus", "+").replace("minus", "-")
-        t = t.replace("times", "*").replace("multiplied by", "*")
-        toks = t.split()
-        for i, op in enumerate(toks):
-            if op in ("+", "-", "*") and 0 < i < len(toks) - 1:
-                a, b = _to_int(toks[i - 1]), _to_int(toks[i + 1])
-                if a is not None and b is not None:
-                    return {"+": a + b, "-": a - b, "*": a * b}[op]
-        m = re.search(r"(\d+)\s*([+\-*])\s*(\d+)", t)
-        if m:
-            a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
-            return {"+": a + b, "-": a - b, "*": a * b}[op]
-        return None
-
-    def _perceive(self, text):
-        words = _words(text)
-        intent, conf = self.perceptron.predict(text)
-        if conf < 0.40:
-            intent = "unknown"
-        return words, intent, conf
-
-    def _is_unknown(self, w):
-        if w in STOPWORDS:
-            return False
-        if len(w) < 3:
-            return False
-        if self.lexicon.has(w) or self.lexicon.has(w + "s") or self.lexicon.has(w + "es"):
-            return False
-        if w.endswith("s") and (self.lexicon.has(w[:-1]) or self.lexicon.has(w[:-2])):
-            return False
-        if w in self.definitions:
-            return False
-        if hasattr(self, "meanings") and w in self.meanings:
-            return False
-        return True
-
-    def _find_unknown(self, words):
-        seen, unknown = set(), []
-        for w in words:
-            if w in seen:
-                continue
-            seen.add(w)
-            if self._is_unknown(w):
-                unknown.append(w)
-        unknown.sort(key=lambda w: -len(w))
-        return unknown
-
-
-    def _auto_vocab(self, text):
-        """Silently adds unknown non-stopword words to lexicon. Returns genuinely new words."""
-        new_words = []
-        # Skip auto_vocab if this is a definition query for a known multi-word term
-        # e.g., "Who is Muhammad Salman Shar" -> "muhammad salman" is known, "shar" is extra
-        text_lower = text.lower().strip()
-        def_prefixes = ("what is", "whats", "who is", "whos", "tell me about", "define", "explain")
-        if any(text_lower.startswith(p) for p in def_prefixes):
-            for key in self.definitions:
-                if len(key.split()) >= 2 and key in text_lower:
-                    return []  # Known multi-word target found; no curiosity needed
-        # Pre-compute words that are parts of multi-word definition keys
-        known_terms = set()
-        for key in self.definitions:
-            for w in key.split():
-                known_terms.add(w)
-        for w in _words(text):
-            if w in STOPWORDS or len(w) < 3:
-                continue
-            if w in self.definitions or w in self.fact_store.facts:
-                continue
-            if w in known_terms:
-                continue
-            if self.lexicon.has(w):
-                continue
-            if w.endswith("s") and (self.lexicon.has(w[:-1]) or self.lexicon.has(w[:-2])):
-                continue
-            self.lexicon.see(w)
-            new_words.append(w)
-        return new_words
-
-    def _attend(self, words):
-        known = sum(1 for w in words if self.lexicon.has(w))
-        ratio = known / max(len(words), 1)
-        if ratio < 0.3:
-            self.affect.event("new_input", intensity=0.25)
-        else:
-            self.affect.event("familiar_input", intensity=ratio)
-        return ratio
-
-    def _bind_words(self, words):
-        if not words:
-            return
-        for i, w in enumerate(words):
-            ctx = [words[j] for j in range(len(words)) if j != i][:2]
-            self.lexicon.see(w, ctx)
-
-    def _lookup_definition(self, text):
-        q = _words(text)
-        t_low = text.lower().strip()
-        def_triggers = ("what is", "whats", "who is", "whos", "tell me about", "define", "explain", "what does", "what do", "meaning of")
-        is_def_q = any(t_low.startswith(w) for w in def_triggers)
-        if not q or (not is_def_q and "?" not in text):
-            return None
-        
-        # Don't hijack SVO queries like "what does salman eat"
-        if parse_query(text) is not None:
-            return None
-            
-        target = self._extract_target_from_question(q) or q[-1]
-        if target in {"you", "he", "she", "it", "they", "them"}:
-            return None
-        if target in self.definitions:
-            resp = swap_pronouns(self.definitions[target])
-            return resp
-        if target in self.fact_store.facts:
-            return f"{target.capitalize()} is {self.fact_store.facts[target]}."
-        if self.relations.get("IS", target):
-            return f"{target.capitalize()} is related to {', '.join(self.relations.get('IS', target))}."
-        return None
-
-    def _generate(self, intent, conf, text, recall):
-        t_low = text.lower()
-        if "your name" in t_low or "who are you" in t_low or "what are you" in t_low:
-            return f"I am {self.personality.NAME}, built by {self.personality.BUILDER}."
-        if "your age" in t_low or "how old are you" in t_low:
-            return f"I am {self.personality.AGE} years old."
-            
-        math = self._try_math(text)
-        if math is not None:
-            self.affect.event("rewarded", intensity=0.5)
-            return f"The answer is {math}."
-        # L2.5: what is X where X is known-but-undefined -> ask user
-        if _is_question_text(text) and parse_query(text) is None:
-            qw = _words(text)
-            if qw and qw[0] == "what" and len(qw) >= 3:
-                target = qw[-1]
-                known_meaning = (
-                    target in self.definitions
-                    or bool(self.relations.get("IS", target))
-                    or (hasattr(self, "meanings") and target in self.meanings)
-                )
-                if (len(target) >= 3
-                        and target not in FUNCTION_WORDS
-                        and self.lexicon.has(target)
-                        and not known_meaning):
-                    self.pending = (target, text)
-                    self.ask_depth += 1
-                    self.asked_words.add(target)
-                    self.affect.event("new_input", intensity=0.6)
-                    return f"I know the word '{target}' but I don't know its meaning. Can you tell me?"
-
-        rel_query = parse_query(text)
-        if rel_query:
-            rel_type, subj, obj = rel_query
-            
-            if rel_type == "SVO":
-                composed_obj = compose_object(subj, obj, self.relations)
-                if composed_obj:
-                    return produce_svo(subj, obj, composed_obj)
-                return f"I don't know what {subj} {obj}s."
-
-            verb_map = {"IS": "is", "HAS": "has", "CAN": "can"}
-            verb = verb_map.get(rel_type, "is")
-            
-            # Check for explicit negation (Defeasible Reasoning: specific rule overrides)
-            if rel_type == "CAN":
-                neg_status, _ = self.relations.query("NOT_CAN", subj, obj)
-                if neg_status == "yes":
-                    return f"No, {subj} can not {obj}."
-
-            status, detail = self.relations.query(rel_type, subj, obj)
-            if status == "yes":
-                if rel_type == "IS":
-                    return f"Yes, {subj} is {get_article(obj)} {obj}."
-                return f"Yes, {subj} {verb} {obj}."
-            if status == "superseded":
-                active = self.relations.get(rel_type, subj)
-                if active:
-                    return f"No, {subj} {verb} {', '.join(active)}, not {obj}."
-                return f"No, {subj} {verb} {obj} is outdated."
-            if status == "no":
-                inferred, reason_msg, inferred_conf, inferred_mode = infer_relation_full(self.relations, subj, rel_type, obj)
-                if inferred:
-                    if inferred_mode == "derived":
-                        return f"Yes, because {reason_msg} (confidence: {int(inferred_conf * 100)}%)"
-                    return f"Yes, {reason_msg}"
-                if detail:
-                    # If it's CAN, we say "I know dog can bark" not "dog is bark"
-                    known_str = f"{subj} {verb} {detail[0]}" if len(detail) == 1 else f"{subj} {verb} {', '.join(detail[:-1])} or {detail[-1]}"
-                    return f"I know {known_str}, but I don't know if {subj} {verb} {obj}."
-                return f"I don't have enough information about {subj} yet."
-            return f"I don't know {subj} yet. Teach me?"
-        # L7: Use realizer if meaning was stored via construction
-        if _is_question_text(text) and parse_query(text) is None:
-            qw = _words(text)
-            if len(qw) >= 3 and qw[0] == "what" and qw[1] == "is":
-                target = qw[-1]
-                if target in self.meanings:
-                    return realize(self.meanings[target])
-
-        # Age attribute query: "salman age" / "What is salman age"
-        _words_set = set(_words(text))
-        if "age" in _words_set:
-            _skip = {"age", "is", "are", "was", "were", "my", "i", "your", "me",
-                     "how", "what", "whats", "the", "a", "an", "of", "do", "does", "did",
-                     "old", "you", "he", "she", "it", "they"}
-            for _w in _words(text):
-                if _w not in _skip and len(_w) >= 3:
-                    _ages = self.relations.get("HAS_AGE", _w)
-                    if _ages:
-                        return f"{_w.capitalize()} is {_ages[0]} years old."
-
-        lookup = self._lookup_definition(text)
-        if lookup:
-            return lookup
-        if recall and intent != "identity":
-            past_ep, past_score = recall[0]
-            past_text = past_ep["text"]
-            cur_content = _content_words(text)
-            past_content = _content_words(past_text)
-            overlap = cur_content & past_content
-
-            past_is_question = _is_question_text(past_text)
-            cur_is_question = _is_question_text(text)
-
-            use_recall = (
-                past_score > 0.55
-                and len(overlap) >= 1
-                and not (past_is_question and cur_is_question)
+    def _reply(
+        self,
+        user_input: str,
+        response: str,
+        intent: str,
+        mode: str,
+        confidence: float,
+        recalled_ids: Optional[List[str]] = None,
+        proof_steps: Optional[List[str]] = None,
+        learned: Optional[List[str]] = None,
+        cortex_used: bool = False,
+        record_episode: bool = True,
+    ) -> Dict[str, Any]:
+        recalled = recalled_ids or []
+        proof = proof_steps or []
+        ep = None
+        if record_episode:
+            ep = self.episodic.record(
+                user_input=user_input,
+                intent=intent,
+                recalled_frame_ids=recalled,
+                proof_steps=proof,
+                response=response,
+                confidence=confidence,
+                mode=mode,
             )
-            if use_recall:
-                past_clean = past_text.strip()
-                if past_clean:
-                    past_clean = past_clean[0].upper() + past_clean[1:]
-                
-                # If user is asking a question, confirm it. If statement, just recall.
-                past_swapped = swap_pronouns(past_clean)
-                if _is_question_text(text):
-                    return f"Yes, you told me earlier: \"{past_swapped}\""
-                return f"I remember you said: \"{past_swapped}\"."
-        return self.lang.generate(intent, self.personality, self.affect)
+        self.turn_count += 1
+        self.updated_at = time.time()
+        return {
+            "response": response,
+            "mode": mode,
+            "intent": intent,
+            "confidence": round(float(confidence), 3),
+            "recalled_frame_ids": recalled,
+            "proof_steps": proof,
+            "learned": learned or [],
+            "episode_id": ep["id"] if ep else None,
+            "cortex_used": cortex_used,
+            "stats": {
+                "frames": len(self.hypergraph.frames),
+                "senses": len(self.hypergraph.senses),
+                "episodes": len(self.episodic.episodes),
+                "schemas": len(self.episodic.schemas),
+            },
+        }
 
-    def _reset_chain(self):
-        self.ask_depth = 0
-        self.asked_words.clear()
+    def apply_feedback(self, positive: bool, episode_id: Optional[str] = None) -> Dict[str, Any]:
+        """Surgical Credit Assignment on exact recalled frames of an episode."""
+        target_ep = None
+        if episode_id:
+            for ep in reversed(self.episodic.episodes):
+                if ep.get("id") == episode_id:
+                    target_ep = ep
+                    break
+        if target_ep is None:
+            target_ep = self.episodic.get_last_episode(skip_meta=True)
 
-    def _try_learn_relation(self, text):
-        # Do not learn from questions! Only statements.
-        if _is_question_text(text) or text.strip().endswith("?") or text.lower().startswith(("what ", "whats ", "who ", "whos ", "where ", "wheres ", "when ", "whens ", "why ", "whys ", "how ", "hows ")):
-            return None
-            
-        words = _words(text)
-        if len(words) < 3:
-            return None
-        
-        # NEW: Handle CAN/CANNOT BEFORE SVO (modal priority)
-        if "cannot" in words or ("can" in words and "not" in words):
-            can_idx = words.index("cannot") if "cannot" in words else words.index("can")
-            can_subj = [w for w in words[:can_idx] if w not in NOUN_DETERMINERS and w not in AUX_VERBS]
-            can_obj = _pick_head_noun([w for w in words[can_idx+1:] if w != "not"])
-            if can_subj and can_obj:
-                can_subject = can_subj[-1]
-                if can_subject not in {"you", "he", "she", "it", "they", "them"} and len(can_subject) >= 3:
-                    self.relations.add("NOT_CAN", can_subject, can_obj, correct=True)
-                    self.definitions[can_subject] = text.strip()
-                    if not self.lexicon.has(can_obj):
-                        self.lexicon.see(can_obj)
-                    return f"Got it! I learned that {can_subject} cannot {can_obj}."
-            return None
+        if not target_ep:
+            return {"ok": False, "message": "No previous episode found to update.", "updated": []}
 
-        if "can" in words:
-            can_idx = words.index("can")
-            can_subj = [w for w in words[:can_idx] if w not in NOUN_DETERMINERS and w not in AUX_VERBS]
-            can_obj = _pick_head_noun(words[can_idx+1:])
-            if can_subj and can_obj:
-                can_subject = can_subj[-1]
-                if can_subject not in {"you", "he", "she", "it", "they", "them"} and len(can_subject) >= 3:
-                    self.relations.add("CAN", can_subject, can_obj, correct=False)
-                    self.definitions[can_subject] = text.strip()
-                    if not self.lexicon.has(can_obj):
-                        self.lexicon.see(can_obj)
-                    return f"Got it! I learned that {can_subject} can {can_obj}."
-            return None
+        target_ep["feedback"] = "positive" if positive else "negative"
+        fids = target_ep.get("recalled_frame_ids", [])
+        if not fids:
+            return {
+                "ok": True,
+                "message": "Feedback logged on episode (no symbolic frames needed adjustment).",
+                "episode_id": target_ep["id"],
+                "updated": [],
+            }
 
-        # 1. Check for SVO verbs (likes, wants, eats, etc.)
-        svo_verb = None
-        for w in words:
-            if is_svo_verb(w):
-                svo_verb = w
-                break
-                
-        if svo_verb:
-            idx = words.index(svo_verb)
-            pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS and w not in AUX_VERBS]
-            post = [w for w in words[idx+1:] if w not in NOUN_DETERMINERS and w not in STOP_TAIL]
-            if pre and post:
-                subject = pre[-1]
-                if len(subject) >= 3:
-                    self.definitions[subject] = text.strip()
-                    self.lexicon.see(subject, post[:3])
-                    rels = extract(subject, text)
-                    if rels:
-                        for rel in rels:
-                            self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
-                            if rel["object"] and not self.lexicon.has(rel["object"]):
-                                self.lexicon.see(rel["object"])
-                        subj_cap = subject.capitalize() if subject.lower() != "i" else "I"
-                        return f"Got it! I learned that {subj_cap} {svo_verb} {' '.join(post[:3])}."
-            return None
+        reward = 0.8 if positive else -1.2
+        updated = self.hypergraph.surgical_update(
+            frame_ids=fids,
+            reward=reward,
+            only_last_culprit=(not positive),
+        )
+        self.updated_at = time.time()
+        return {
+            "ok": True,
+            "episode_id": target_ep["id"],
+            "feedback": target_ep["feedback"],
+            "updated": updated,
+            "message": (
+                f"Reinforced {len(updated)} exact memory link(s)."
+                if positive
+                else f"Surgical correction applied to culprit link ({len(updated)} frame adjusted; unrelated knowledge untouched)."
+            ),
+        }
 
-        # 2. Fallback to standard relations (means, is, are, has)
-        m = None
-        for word in ("means", "is", "are", "has", "can"):
-            if word in words:
-                m = word
-                break
-        
+    def run_sleep_consolidation(self, force: bool = True) -> Dict[str, Any]:
+        """Trigger Offline Sleep Consolidation Engine."""
+        report = self.episodic.consolidate(force=force)
+        # Re-normalize outgoing weights across all active agents during sleep
+        for agent in list(self.hypergraph._by_agent.keys()):
+            self.hypergraph.normalize_outgoing_weights(agent)
+        self.updated_at = time.time()
+        return report
+
+    def _handle_meta_recall(self, text: str) -> Optional[Dict[str, Any]]:
+        low = text.lower().strip()
+        if any(
+            k in low
+            for k in (
+                "what did you recall",
+                "what did i ask",
+                "last conversation",
+                "previous episode",
+                "explain your reasoning",
+                "show proof",
+                "why did you say",
+                "last recall",
+                "pichli baar",
+                "pichla recall",
+            )
+        ):
+            last_ep = self.episodic.get_last_episode(skip_meta=True)
+            if not last_ep:
+                return self._reply(
+                    text,
+                    "I do not have any prior episode logged yet. Ask or teach me something first.",
+                    intent="meta_recall",
+                    mode="stored",
+                    confidence=1.0,
+                    record_episode=False,
+                )
+            proof_txt = "; ".join(last_ep.get("proof_steps", [])) or "No symbolic proof steps were required."
+            recalled_n = len(last_ep.get("recalled_frame_ids", []))
+            msg = (
+                f"In my last episode ({last_ep['id']}), you said: \"{last_ep['user_input']}\". "
+                f"I recalled {recalled_n} hypergraph frame(s) and answered: \"{last_ep['response']}\". "
+                f"Reasoning trace: {proof_txt}"
+            )
+            return self._reply(
+                text,
+                msg,
+                intent="meta_recall",
+                mode="stored",
+                confidence=1.0,
+                recalled_ids=last_ep.get("recalled_frame_ids", []),
+                proof_steps=last_ep.get("proof_steps", []),
+                record_episode=False,
+            )
+
+        if low in {"sleep", "consolidate", "consolidate memory", "run sleep"}:
+            rep = self.run_sleep_consolidation(force=True)
+            msg = (
+                f"Sleep consolidation complete: {rep['schemas_created']} new schema(s) distilled, "
+                f"{rep['schemas_updated']} updated, {rep['pruned']} redundant raw log(s) pruned. "
+                f"Total schemas: {rep['total_schemas']}."
+            )
+            return self._reply(
+                text,
+                msg,
+                intent="sleep",
+                mode="stored",
+                confidence=1.0,
+                proof_steps=["Executed offline sleep consolidation and homeostatic weight normalization."],
+                record_episode=False,
+            )
+        return None
+
+    def _handle_feedback_text(self, text: str) -> Optional[Dict[str, Any]]:
+        low = text.lower().strip().strip(".!?")
+        if low in _NEG_FEEDBACK_PHRASES or any(low.startswith(p) for p in ("that's wrong", "that is wrong", "wrong,", "wrong.", "no, that")):
+            res = self.apply_feedback(positive=False)
+            return self._reply(
+                text,
+                f"Got it — {res['message']} Tell me the right fact so I can lock it in.",
+                intent="feedback_negative",
+                mode="stored",
+                confidence=1.0,
+                proof_steps=[res["message"]],
+                record_episode=False,
+            )
+        if low in _POS_FEEDBACK_PHRASES:
+            res = self.apply_feedback(positive=True)
+            return self._reply(
+                text,
+                f"Appreciate the confirmation — {res['message']}",
+                intent="feedback_positive",
+                mode="stored",
+                confidence=1.0,
+                proof_steps=[res["message"]],
+                record_episode=False,
+            )
+        return None
+
+    def _handle_forget(self, text: str) -> Optional[Dict[str, Any]]:
+        m = re.match(r"^(?:forget|delete|erase)\s+(?:about\s+)?(.+?)[.!?]*$", text.strip(), re.IGNORECASE)
         if not m:
             return None
+        target = _clean_phrase(m.group(1))
+        removed = self.hypergraph.remove_entity(target)
+        if removed > 0:
+            return self._reply(
+                text,
+                f"Forgotten {removed} learned memory frame(s) related to '{target}'. Core identity remains protected.",
+                intent="forget",
+                mode="stored",
+                confidence=1.0,
+                proof_steps=[f"Removed {removed} non-core frames matching '{target}'."],
+            )
+        return self._reply(
+            text,
+            f"I found no removable learned memories for '{target}'.",
+            intent="forget",
+            mode="unknown",
+            confidence=0.5,
+        )
 
-        idx = words.index(m)
-        pre = [w for w in words[:idx] if w not in NOUN_DETERMINERS]
-        post = [w for w in words[idx+1:] if w not in NOUN_DETERMINERS and w not in STOP_TAIL]
-        
-        if not pre or not post:
-            return None
-            
-        subject = pre[-1]
-        if subject in {"you", "he", "she", "it", "they", "them"}:
-            return None
-        if len(subject) < 3:
-            return None
-        # Circular guard: "Computer is computer science" (post[0] == subject)
-        if post and post[0] == subject:
-            return f"I can't define '{subject}' using the word '{subject}' itself. Try a different definition."
+    def _handle_profile(self, text: str) -> Optional[Dict[str, Any]]:
+        stripped = text.strip()
+        low = stripped.lower().rstrip("?!. ")
 
-        self.definitions[subject] = text.strip()
-        self.lexicon.see(subject, post[:3])
-            
-        rels = extract(subject, text)
-        if not rels:
-            return None
-            
-        for rel in rels:
-            self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
-            if rel["object"] and not self.lexicon.has(rel["object"]):
-                self.lexicon.see(rel["object"])
-                
-        return f"Got it! I learned that {subject} {m} {' '.join(post[:3])}."
+        # Profile queries
+        if low in {"what is my name", "whats my name", "what's my name", "who am i", "do you know my name"}:
+            name = self.profile.get("name")
+            if name:
+                return self._reply(
+                    stripped,
+                    f"Your name is {name}.",
+                    intent="profile_query",
+                    mode="stored",
+                    confidence=0.98,
+                    proof_steps=[f"User profile lookup: name = {name}"],
+                )
+            return self._reply(
+                stripped,
+                "You have not told me your name yet. Say 'my name is ...' and I will remember it.",
+                intent="profile_query",
+                mode="unknown",
+                confidence=0.0,
+            )
 
-    def _try_construction(self, text):
-        meaning = parse_to_meaning(text)
-        # Only store statements, not questions
-        if meaning and meaning[0] in ("IS_A", "IS_PROP", "SVO"):
-            subj = meaning[1].lower()
-            self.meanings[subj] = meaning
-        return meaning
+        if low in {"what is my age", "how old am i", "whats my age", "what's my age"}:
+            age = self.profile.get("age")
+            if age:
+                return self._reply(
+                    stripped,
+                    f"You told me you are {age} years old.",
+                    intent="profile_query",
+                    mode="stored",
+                    confidence=0.98,
+                    proof_steps=[f"User profile lookup: age = {age}"],
+                )
+            return self._reply(
+                stripped,
+                "I do not know your age yet. Tell me 'I am 18 years old' and I will store it.",
+                intent="profile_query",
+                mode="unknown",
+                confidence=0.0,
+            )
 
-    def _answer_question(self, text):
-        fkey = fact_query(text)
-        if fkey:
-            val = self.fact_store.get(fkey)
-            response = (format_answer(fkey, val) if val is not None
-                        else f"I don't know your {fkey} yet. Tell me?")
-            wq = _words(text)
-            self._attend(wq)
-            self._bind_words(wq)
-            self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
-            self.affect.tick()
-            return {
-                "turn": self.turn, "text": text, "intent": "question",
-                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                "response": response,
-            }
-        new_words = self._auto_vocab(text)
+        if low in {"where do i live", "what is my city", "where am i from"}:
+            loc = self.profile.get("location")
+            if loc:
+                return self._reply(
+                    stripped,
+                    f"You told me you live in {loc}.",
+                    intent="profile_query",
+                    mode="stored",
+                    confidence=0.98,
+                    proof_steps=[f"User profile lookup: location = {loc}"],
+                )
+            return self._reply(
+                stripped,
+                "You have not shared your location yet.",
+                intent="profile_query",
+                mode="unknown",
+                confidence=0.0,
+            )
 
-        words, intent, conf = self._perceive(text)
-        self._attend(words)
-        lookup = self._lookup_definition(text)
-        if lookup:
-            response = lookup
-        else:
-            recall = self.episodic.recall(text, top_k=1)
-            response = self._generate(intent, conf, text, recall)
-        self._bind_words(words)
-        self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
-        self.affect.tick()
-        return {
-            "turn": self.turn, "text": text, "intent": intent,
-            "confidence": round(conf, 3), "mood": self.affect.mood(),
-            "recall": None, "response": response,
-        }
+        # Profile teaching
+        m_name = re.match(r"^(?:my name is|call me|i am called)\s+([a-zA-Z][a-zA-Z0-9 .'-]{1,40})[.!]*$", stripped, re.IGNORECASE)
+        if m_name:
+            name = m_name.group(1).strip()
+            self.profile["name"] = name
+            fr = self.hypergraph.add_frame("HAS_NAME", "user", name, raw_text=stripped)
+            return self._reply(
+                stripped,
+                f"Got it, {name}. I have stored your name in my memory.",
+                intent="profile_teach",
+                mode="stored",
+                confidence=1.0,
+                recalled_ids=[fr["id"]],
+                proof_steps=[f"Stored user profile: name = {name}"],
+                learned=[f"user HAS_NAME {name}"],
+            )
 
-    def _resolve_pending(self, text):
-        word, original = self.pending
-        self.pending = None
-        definition = text.strip()
-        # Strip prefixes like "remember this" and trailing quotes
-        definition = re.sub(r'^(remember this|remember|learn this|learn|note this)[\s:]+', '', definition, flags=re.I)
-        definition = definition.strip('"\' ')
-        
-        # Pivot logic: If user gave a definition for a different word
-        def_words = _words(definition)
-        if def_words:
-            first_word = def_words[0]
-            if (word and first_word != word.lower() and len(first_word) >= 3 
-                and first_word not in FUNCTION_WORDS 
-                and any(w in def_words[1:4] for w in ("is", "are", "means", "has"))):
-                # User pivoted to a new subject, process this new sentence independently
-                self.pending = None
-                self._reset_chain()
-                return self._observe_inner(definition)
-                
-        w_lower = (word or "").lower()
+        m_age = re.match(r"^(?:my age is|i am|i'm)\s+(\d{1,3})(?:\s*years?\s*old)?[.!]*$", stripped, re.IGNORECASE)
+        if m_age:
+            age = m_age.group(1)
+            self.profile["age"] = age
+            fr = self.hypergraph.add_frame("HAS_AGE", "user", age, raw_text=stripped)
+            return self._reply(
+                stripped,
+                f"Noted — I will remember that you are {age} years old.",
+                intent="profile_teach",
+                mode="stored",
+                confidence=1.0,
+                recalled_ids=[fr["id"]],
+                proof_steps=[f"Stored user profile: age = {age}"],
+                learned=[f"user HAS_AGE {age}"],
+            )
 
-        def_unknown = [w for w in _words(definition)
-                       if w != w_lower and self._is_unknown(w)]
-        orig_unknown = [w for w in _words(original)
-                        if w != w_lower and self._is_unknown(w)]
+        m_loc = re.match(r"^(?:i live in|i am from|i'm from)\s+([a-zA-Z][a-zA-Z0-9 ,'-]{1,50})[.!]*$", stripped, re.IGNORECASE)
+        if m_loc:
+            loc = m_loc.group(1).strip()
+            self.profile["location"] = loc
+            fr = self.hypergraph.add_frame("LOCATED_IN", "user", loc, raw_text=stripped)
+            return self._reply(
+                stripped,
+                f"Saved — you live in {loc}.",
+                intent="profile_teach",
+                mode="stored",
+                confidence=1.0,
+                recalled_ids=[fr["id"]],
+                proof_steps=[f"Stored user profile: location = {loc}"],
+                learned=[f"user LOCATED_IN {loc}"],
+            )
 
-        if word is None:
-            # If it's a phrase, try to extract the core subject from the original text
-            # e.g., "human is specie" -> subject is "human"
-            original_words = _words(original)
-            subject = original_words[0] if original_words else "phrase"
-            self.definitions[subject] = definition
-            label = subject
-            self.lexicon.see(subject, _words(definition)[:3])
-            for rel in extract(subject, definition):
-                self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
-        else:
-            self.definitions[word] = definition
-            label = word
-            self.lexicon.see(word, _words(definition)[:3])
-            for rel in extract(word, definition):
-                self.relations.add(rel["type"], rel["subject"], rel["object"], rel["correct"])
-                if rel["object"] and not self.lexicon.has(rel["object"]):
-                    self.lexicon.see(rel["object"])
+        return None
 
-        self.episodic.store(f"learned {label}: {definition}", "curious", "[learned]", 1.0)
-        self.affect.event("rewarded", intensity=0.8)
+    def _try_extract_local_facts(self, sentence: str) -> List[Dict[str, Any]]:
+        """Extract role-bound frames from declarative English sentences."""
+        s = sentence.strip().rstrip(".!")
+        if not s or s.endswith("?"):
+            return []
+        # Skip questions even if user forgot '?'
+        first_word = s.split()[0].lower()
+        if first_word in {"who", "what", "where", "when", "why", "how", "can", "does", "do", "did", "is", "are"}:
+            return []
 
-        seen = set()
-        candidates = []
-        for w in def_unknown + orig_unknown:
-            if w not in seen and w not in self.asked_words:
-                seen.add(w)
-                candidates.append(w)
-        candidates.sort(key=lambda w: -len(w))
+        extracted: List[Dict[str, Any]] = []
 
-        if candidates and self.ask_depth < self.max_depth:
-            nw = candidates[0]
-            self.pending = (nw, original)
-            self.ask_depth += 1
-            self.asked_words.add(nw)
-            self.affect.tick()
-            return {
-                "turn": self.turn, "text": text, "intent": "question",
-                "confidence": 0, "mood": self.affect.mood(), "recall": None,
-                "response": f"Got it! But what is '{nw}'?",
-                "defined": label,
-            }
+        # 1. Negative capability: X cannot / can't Y
+        m = re.match(r"^(.+?)\s+(?:cannot|can't|can not)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "CAN",
+                "agent": _clean_phrase(m.group(1)),
+                "action": "can",
+                "patient": _clean_phrase(m.group(2)),
+                "polarity": -1,
+            })
+            return extracted
 
-        self._reset_chain()
-        words, intent, conf = self._perceive(original)
-        self._attend(words)
-        self._bind_words(words)
-        recall = self.episodic.recall(original, top_k=1)
-        if intent == "unknown" or conf < 0.40:
-            response = f"Got it! Now I know about '{label}'. Thanks for teaching me!"
-        else:
-            response = "Got it! " + self._generate(intent, conf, original, recall)
-        self.episodic.store(original, self.affect.mood(), response, self.affect.binding_strength())
-        self.affect.tick()
-        return {
-            "turn": self.turn, "text": text, "intent": intent,
-            "confidence": round(conf, 3), "mood": self.affect.mood(),
-            "recall": recall[0][0]["text"] if recall else None,
-            "response": response, "defined": label,
-        }
+        # 2. Positive capability: X can Y
+        m = re.match(r"^(.+?)\s+can\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "CAN",
+                "agent": _clean_phrase(m.group(1)),
+                "action": "can",
+                "patient": _clean_phrase(m.group(2)),
+                "polarity": 1,
+            })
+            return extracted
 
-    def observe(self, text, llm_url=None, llm_model=None, llm_key=None):
-        self.turn += 1
-        result = self._observe_inner(text)
-        
-        # LLM Teacher Integration (if API key exists, otherwise returns raw)
-        if result and result.get("response"):
-            raw_thought = result["response"]
-            result["raw_thought"] = raw_thought
-            result["response"] = improve_language(raw_thought, text, llm_url, llm_model, llm_key)
-            
-        self._maybe_save()
+        # 3. Age attribute: X is 18 years old
+        m = re.match(r"^(.+?)\s+is\s+(\d{1,3})\s+years?\s+old$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "HAS_AGE",
+                "agent": _clean_phrase(m.group(1)),
+                "action": "has_age",
+                "patient": m.group(2),
+                "polarity": 1,
+            })
+            return extracted
+
+        # 4. Negative taxonomy: X is not a Y
+        m = re.match(r"^(.+?)\s+(?:is|are)\s+not\s+(?:a|an)?\s*(.+)$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "IS_A",
+                "agent": _clean_phrase(m.group(1)),
+                "action": "is",
+                "patient": _clean_phrase(m.group(2)),
+                "polarity": -1,
+            })
+            return extracted
+
+        # 5. Taxonomy / definition: X is a Y / X is Y
+        m = re.match(r"^(.+?)\s+(?:is|are)\s+(a|an)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "IS_A",
+                "agent": _clean_phrase(m.group(1)),
+                "action": "is",
+                "patient": _clean_phrase(m.group(3)),
+                "polarity": 1,
+            })
+            return extracted
+
+        m = re.match(r"^(.+?)\s+(?:is|are|means)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            ag = _clean_phrase(m.group(1))
+            pat = _clean_phrase(m.group(2))
+            if ag and pat and ag.lower() not in {"it", "this", "that", "there"}:
+                extracted.append({
+                    "relation": "DEFINED_AS",
+                    "agent": ag,
+                    "action": "is",
+                    "patient": pat,
+                    "polarity": 1,
+                })
+                return extracted
+
+        # 6. Possession: X has / have Y
+        m = re.match(r"^(.+?)\s+(?:has|have)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "HAS",
+                "agent": _clean_phrase(m.group(1)),
+                "action": "has",
+                "patient": _clean_phrase(m.group(2)),
+                "polarity": 1,
+            })
+            return extracted
+
+        # 7. Location: X lives in / is located in Y
+        m = re.match(r"^(.+?)\s+(?:lives?\s+in|located\s+in|stays?\s+in)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "LOCATED_IN",
+                "agent": _clean_phrase(m.group(1)),
+                "action": "lives_in",
+                "patient": _clean_phrase(m.group(2)),
+                "polarity": 1,
+            })
+            return extracted
+
+        # 8. Creation: X created / built / made / founded Y
+        m = re.match(r"^(.+?)\s+(created|built|made|founded|developed)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            extracted.append({
+                "relation": "CREATED",
+                "agent": _clean_phrase(m.group(1)),
+                "action": _canon_verb(m.group(2)),
+                "patient": _clean_phrase(m.group(3)),
+                "polarity": 1,
+            })
+            return extracted
+
+        # 9. Role-bound SVO event (solves Binding Problem: "dog bit man" != "man bit dog")
+        m = re.match(
+            r"^([a-zA-Z][a-zA-Z0-9 '-]{1,35}?)\s+(bit|bite|bites|ate|eats|chased|chases|killed|kills|helped|helps|loved|loves|hated|hates|liked|likes|hit|hits|saw|sees|taught|teaches|broke|fixed|wrote)\s+([a-zA-Z][a-zA-Z0-9 '-]{1,40})$",
+            s,
+            re.IGNORECASE,
+        )
+        if m:
+            verb_raw = m.group(2).lower()
+            extracted.append({
+                "relation": "ACTION",
+                "agent": _clean_phrase(m.group(1)),
+                "action": _canon_verb(verb_raw),
+                "patient": _clean_phrase(m.group(3)),
+                "polarity": 1,
+                "modifier": verb_raw,
+            })
+            return extracted
+
+        return extracted
+
+    def _answer_query(self, text: str) -> Optional[Dict[str, Any]]:
+        """Proof-tracked symbolic question answering across roles, capabilities, and definitions."""
+        q = text.strip().rstrip("?!. ")
+        low = q.lower()
+
+        # 1. Self & NeuraSaMu identity queries
+        if any(trig in low for trig in _SELF_TRIGGERS):
+            if "neurasamu" in low:
+                frames = self.hypergraph.get_frames_for_agent("neurasamu")
+                fids = [f["id"] for f in frames[:3]]
+                return self._reply(
+                    text,
+                    "NeuraSaMu is an independent AI research and software development lab founded by Muhammad Salman Shar (neurasamu.com), focused on neuro-symbolic intelligence like NSM VB.",
+                    intent="self_query",
+                    mode="stored",
+                    confidence=0.99,
+                    recalled_ids=fids,
+                    proof_steps=["Core identity recall: NeuraSaMu -> independent AI lab founded by Muhammad Salman Shar."],
+                )
+            if any(w in low for w in ("made", "created", "built", "creator", "founder")):
+                frames = self.hypergraph.get_frames_for_agent("muhammad salman shar")
+                fids = [f["id"] for f in frames[:3]]
+                return self._reply(
+                    text,
+                    "I was created by Muhammad Salman Shar (Salman / Akira), the founder of NeuraSaMu.",
+                    intent="self_query",
+                    mode="stored",
+                    confidence=0.99,
+                    recalled_ids=fids,
+                    proof_steps=["Core identity recall: Muhammad Salman Shar CREATED NSM VB."],
+                )
+            frames = self.hypergraph.get_frames_for_agent("nsm vb")
+            fids = [f["id"] for f in frames[:3]]
+            return self._reply(
+                text,
+                "I am NSM VB v1.4, a neuro-symbolic virtual brain built by Muhammad Salman Shar at NeuraSaMu. I learn role-bound facts, track my own reasoning traces, evolve through surgical feedback, and consolidate memory offline.",
+                intent="self_query",
+                mode="stored",
+                confidence=0.99,
+                recalled_ids=fids,
+                proof_steps=["Core identity recall: NSM VB v1.4 cognitive architecture."],
+            )
+
+        # 2. Capability query: "Can X Y?" (Defeasible inheritance + contradiction detection)
+        m = re.match(r"^can\s+(.+?)\s+([a-zA-Z][a-zA-Z0-9 '-]*)$", q, re.IGNORECASE)
+        if m:
+            subj = _clean_phrase(m.group(1))
+            ability = _clean_phrase(m.group(2))
+            res = self.hypergraph.query_capability_or_relation(subj, "CAN", ability)
+            if res["mode"] == "contradicted":
+                return self._reply(
+                    text,
+                    f"My memory holds conflicting evidence on whether {subj} can {ability}. Tell me which one is correct to resolve it.",
+                    intent="query_can",
+                    mode="contradicted",
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            if res["mode"] in {"stored", "derived"}:
+                pol = res["polarity"]
+                basis = "directly stored" if res["mode"] == "stored" else "derived via inheritance"
+                if pol > 0:
+                    ans = f"Yes, {subj} can {ability} ({basis}, confidence {int(res['confidence'] * 100)}%)."
+                else:
+                    ans = f"No, {subj} cannot {ability} ({basis}, confidence {int(res['confidence'] * 100)}%)."
+                return self._reply(
+                    text,
+                    ans,
+                    intent="query_can",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+
+        # 3. Role-bound SVO Agent query: "Who bit man?" / "What chased cat?"
+        m = re.match(r"^(?:who|what)\s+([a-zA-Z]+)\s+(.+)$", q, re.IGNORECASE)
+        if m and m.group(1).lower() not in {"is", "are", "was", "were", "did", "does", "do", "has", "have", "can"}:
+            verb = _canon_verb(m.group(1))
+            patient = _clean_phrase(m.group(2))
+            pat_frames = self.hypergraph.get_frames_for_patient(patient)
+            matches = [
+                f for f in pat_frames
+                if _canon_verb(f.get("action", "")) == verb or (verb == "create" and f.get("relation") == "CREATED")
+            ]
+            if matches:
+                top = matches[0]
+                verb_surface = top.get("modifier") or top.get("action") or m.group(1)
+                conf = self.hypergraph.bayesian_confidence(top)
+                return self._reply(
+                    text,
+                    f"{top['agent'].title()} {verb_surface} {top['patient']}.",
+                    intent="query_role_agent",
+                    mode="stored",
+                    confidence=conf,
+                    recalled_ids=[top["id"]],
+                    proof_steps=[f"Role-bound match: Agent={top['agent']}, Action={top['action']}, Patient={top['patient']}"],
+                )
+
+        # 4. Role-bound SVO Patient query: "Who/What did X <verb>?"
+        m = re.match(r"^(?:who|what)\s+(?:did|does)\s+(.+?)\s+([a-zA-Z]+)$", q, re.IGNORECASE)
+        if m:
+            agent = _clean_phrase(m.group(1))
+            verb = _canon_verb(m.group(2))
+            ag_frames = self.hypergraph.get_frames_for_agent(agent)
+            matches = [
+                f for f in ag_frames
+                if _canon_verb(f.get("action", "")) == verb or (verb == "create" and f.get("relation") == "CREATED")
+            ]
+            if matches:
+                top = matches[0]
+                verb_surface = top.get("modifier") or top.get("action") or m.group(2)
+                conf = self.hypergraph.bayesian_confidence(top)
+                return self._reply(
+                    text,
+                    f"{top['agent'].title()} {verb_surface} {top['patient']}.",
+                    intent="query_role_patient",
+                    mode="stored",
+                    confidence=conf,
+                    recalled_ids=[top["id"]],
+                    proof_steps=[f"Role-bound match: Agent={top['agent']}, Action={top['action']}, Patient={top['patient']}"],
+                )
+
+        # 5. Age query: "How old is X?"
+        m = re.match(r"^how\s+old\s+is\s+(.+)$", q, re.IGNORECASE)
+        if m:
+            subj = _clean_phrase(m.group(1))
+            res = self.hypergraph.query_capability_or_relation(subj, "HAS_AGE")
+            if res["mode"] in {"stored", "derived"} and res["frames"]:
+                val = res["frames"][0]["patient"]
+                return self._reply(
+                    text,
+                    f"{subj.title()} is {val} years old.",
+                    intent="query_age",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+
+        # 6. Location query: "Where does X live?"
+        m = re.match(r"^where\s+(?:does|is)\s+(.+?)(?:\s+live|\s+located)?$", q, re.IGNORECASE)
+        if m:
+            subj = _clean_phrase(m.group(1))
+            res = self.hypergraph.query_capability_or_relation(subj, "LOCATED_IN")
+            if res["mode"] in {"stored", "derived"} and res["frames"]:
+                val = res["frames"][0]["patient"]
+                return self._reply(
+                    text,
+                    f"{subj.title()} lives in {val}.",
+                    intent="query_location",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+
+        # 7. Definition / Topic query: "What is X?" / "Who is X?" / "Tell me about X"
+        m = re.match(r"^(?:what|who)\s+(?:is|are)\s+(.+)$", q, re.IGNORECASE)
+        if not m:
+            m = re.match(r"^(?:tell me about|explain|define|describe)\s+(.+)$", q, re.IGNORECASE)
+        if m:
+            topic = _clean_phrase(m.group(1))
+            frames = self.hypergraph.get_frames_for_agent(topic)
+            if frames:
+                return self._summarize_entity_frames(text, topic, frames)
+            # Check patient side too (e.g. "who is nsm vb" -> reverse links)
+            rev_frames = self.hypergraph.get_frames_for_patient(topic)
+            if rev_frames:
+                return self._summarize_entity_frames(text, topic, rev_frames)
+
+        # 8. Bare topic query (1-3 words matching a known entity)
+        if len(q.split()) <= 3:
+            topic = _clean_phrase(q)
+            frames = self.hypergraph.get_frames_for_agent(topic)
+            if frames:
+                return self._summarize_entity_frames(text, topic, frames)
+
+        # 9. Semantic vector recall across hypergraph & past episodes (handles paraphrases!)
+        sem_hits = self.hypergraph.semantic_search(q, top_k=4, min_score=0.28)
+        if sem_hits:
+            top_frames = [fr for fr, _ in sem_hits[:3]]
+            top_score = sem_hits[0][1]
+            snippets = [self._frame_to_sentence(fr) for fr in top_frames]
+            fids = [fr["id"] for fr in top_frames]
+            proofs = [
+                f"Vector recall ({sc:.2f}): {fr['agent']} {fr['relation']} {fr['patient']}"
+                for fr, sc in sem_hits[:3]
+            ]
+            return self._reply(
+                text,
+                " ".join(snippets),
+                intent="semantic_recall",
+                mode="stored",
+                confidence=min(0.95, max(0.45, top_score)),
+                recalled_ids=fids,
+                proof_steps=proofs,
+            )
+
+        # Check episodic recall if user is asking something similar to a past conversation
+        ep_hits = self.episodic.recall_similar(q, top_k=2, min_score=0.38)
+        if ep_hits:
+            best_ep, ep_score = ep_hits[0]
+            if best_ep.get("response") and best_ep.get("mode") != "unknown":
+                return self._reply(
+                    text,
+                    f"From a similar earlier episode: {best_ep['response']}",
+                    intent="episodic_recall",
+                    mode="derived",
+                    confidence=round(ep_score * 0.85, 3),
+                    recalled_ids=best_ep.get("recalled_frame_ids", []),
+                    proof_steps=[f"Matched prior episode {best_ep['id']} (sim={ep_score:.2f})."],
+                )
+
+        return None
+
+    @staticmethod
+    def _frame_to_sentence(fr: Dict[str, Any]) -> str:
+        ag = fr.get("agent", "")
+        pat = fr.get("patient", "")
+        rel = fr.get("relation", "")
+        pol = fr.get("polarity", 1)
+        if rel == "IS_A":
+            return f"{ag.title()} is {'not ' if pol < 0 else ''}a {pat}."
+        if rel == "DEFINED_AS":
+            return f"{ag.title()} is {'not ' if pol < 0 else ''}{pat}."
+        if rel == "CAN":
+            return f"{ag.title()} {'can' if pol > 0 else 'cannot'} {pat}."
+        if rel == "HAS":
+            return f"{ag.title()} has {pat}."
+        if rel == "HAS_AGE":
+            return f"{ag.title()} is {pat} years old."
+        if rel == "LOCATED_IN":
+            return f"{ag.title()} lives in {pat}."
+        if rel == "CREATED":
+            act = fr.get("action") or "created"
+            return f"{ag.title()} {act} {pat}."
+        if rel == "ACTION":
+            act = fr.get("modifier") or fr.get("action") or "acted on"
+            return f"{ag.title()} {act} {pat}."
+        return f"{ag.title()} {rel.lower().replace('_', ' ')} {pat}."
+
+    def _summarize_entity_frames(self, query: str, topic: str, frames: List[Dict[str, Any]]) -> Dict[str, Any]:
+        selected = frames[:4]
+        sentences = [self._frame_to_sentence(fr) for fr in selected]
+        fids = [fr["id"] for fr in selected]
+        avg_conf = sum(self.hypergraph.bayesian_confidence(fr) for fr in selected) / len(selected)
+        proofs = [
+            f"Hypergraph node '{topic}': {fr['agent']} {fr['relation']} {fr['patient']} (conf={self.hypergraph.bayesian_confidence(fr)})"
+            for fr in selected
+        ]
+        return self._reply(
+            query,
+            " ".join(sentences),
+            intent="topic_query",
+            mode="stored",
+            confidence=avg_conf,
+            recalled_ids=fids,
+            proof_steps=proofs,
+        )
+
+    def observe_bulk(
+        self,
+        text: str,
+        llm_url: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        llm_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Main cognitive turn entrypoint: process user message, learn or reason, and optionally polish via Samu Lab API."""
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return self._reply("", "Please type a message so I can think or learn.", "empty", "unknown", 0.0, record_episode=False)
+
+        low = cleaned.lower().strip(" .!?")
+
+        # 1. Greetings
+        if low in _GREETINGS:
+            user_name = self.profile.get("name")
+            greet = f"Hello{', ' + user_name if user_name else ''}! NSM VB v1.4 is online. Teach me something new or ask me anything."
+            return self._reply(cleaned, greet, "greeting", "stored", 1.0, record_episode=False)
+
+        # 2. Meta-memory recall & sleep command
+        meta_res = self._handle_meta_recall(cleaned)
+        if meta_res:
+            return meta_res
+
+        # 3. Direct textual feedback (Surgical Credit Assignment)
+        fb_res = self._handle_feedback_text(cleaned)
+        if fb_res:
+            return fb_res
+
+        # 4. Forget command
+        forget_res = self._handle_forget(cleaned)
+        if forget_res:
+            return forget_res
+
+        # 5. User profile statements / queries
+        prof_res = self._handle_profile(cleaned)
+        if prof_res:
+            return prof_res
+
+        # 6. Check if the input contains declarative facts to learn (supports multi-sentence bulk teaching)
+        parts = [p.strip() for p in re.split(r"(?<=[.!?;])\s+|\n+", cleaned) if p.strip()]
+        learned_frames: List[Dict[str, Any]] = []
+        learned_summaries: List[str] = []
+        rejected_notes: List[str] = []
+        question_parts: List[str] = []
+
+        for part in parts:
+            if part.endswith("?") or part.split()[0].lower() in {"who", "what", "where", "when", "why", "how", "can", "does", "do", "did"}:
+                question_parts.append(part)
+                continue
+            facts = self._try_extract_local_facts(part)
+            for fc in facts:
+                try:
+                    fr = self.hypergraph.add_frame(
+                        relation=fc["relation"],
+                        agent=fc["agent"],
+                        patient=fc["patient"],
+                        action=fc.get("action", ""),
+                        modifier=fc.get("modifier", ""),
+                        polarity=int(fc.get("polarity", 1)),
+                        source="user",
+                        raw_text=part,
+                    )
+                    learned_frames.append(fr)
+                    learned_summaries.append(self._frame_to_sentence(fr))
+                except ValueError as ve:
+                    rejected_notes.append(str(ve))
+
+        # If both facts and a question were given in one turn, answer the question after learning
+        if question_parts:
+            q_res = self._answer_query(question_parts[-1])
+            if q_res:
+                if learned_summaries:
+                    q_res["learned"] = learned_summaries
+                    q_res["response"] = f"Learned {len(learned_summaries)} fact(s). " + q_res["response"]
+                return self._maybe_enhance_with_cortex(cleaned, q_res, llm_url, llm_model, llm_key)
+
+        # Pure teaching turn
+        if learned_frames and not question_parts:
+            fids = [f["id"] for f in learned_frames]
+            proofs = [f"Stored role-bound frame: {f['agent']} {f['relation']} {f['patient']} (pol={f['polarity']})" for f in learned_frames]
+            if len(learned_summaries) == 1:
+                reply_text = f"Learned and bound in memory: {learned_summaries[0]}"
+            else:
+                reply_text = f"Learned {len(learned_summaries)} structured facts: " + " ".join(learned_summaries[:4])
+            res = self._reply(
+                cleaned,
+                reply_text,
+                intent="teach",
+                mode="stored",
+                confidence=0.95,
+                recalled_ids=fids,
+                proof_steps=proofs,
+                learned=learned_summaries,
+            )
+            return self._maybe_enhance_with_cortex(cleaned, res, llm_url, llm_model, llm_key)
+
+        if rejected_notes and not question_parts:
+            return self._reply(
+                cleaned,
+                f"I skipped that because: {rejected_notes[0]}",
+                intent="reject",
+                mode="unknown",
+                confidence=0.9,
+                proof_steps=rejected_notes,
+            )
+
+        # 7. Symbolic query & vector/episodic recall
+        q_res = self._answer_query(cleaned)
+        if q_res:
+            return self._maybe_enhance_with_cortex(cleaned, q_res, llm_url, llm_model, llm_key)
+
+        # 8. Optional Samu Lab API Cortex fallback: sarcasm check + fact extraction + grounded chat
+        if llm_url and llm_model:
+            analysis = cortex_api.analyze_with_cortex(cleaned, llm_url, llm_model, llm_key)
+            if analysis:
+                if analysis.get("is_sarcastic") and analysis.get("sentiment") == "negative":
+                    fb = self.apply_feedback(positive=False)
+                    return self._reply(
+                        cleaned,
+                        f"Caught the sarcasm — {fb['message']} Let me know the correct detail.",
+                        intent="feedback_negative",
+                        mode="stored",
+                        confidence=0.9,
+                        proof_steps=["Cortex detected sarcastic negative feedback.", fb["message"]],
+                        cortex_used=True,
+                        record_episode=False,
+                    )
+                api_facts = analysis.get("facts") or []
+                api_learned: List[str] = []
+                api_fids: List[str] = []
+                for fc in api_facts[:5]:
+                    if not isinstance(fc, dict):
+                        continue
+                    ag = _clean_phrase(str(fc.get("agent", "")))
+                    pat = _clean_phrase(str(fc.get("patient", "")))
+                    if ag and pat:
+                        try:
+                            fr = self.hypergraph.add_frame(
+                                relation=str(fc.get("relation", "RELATED_TO")),
+                                agent=ag,
+                                patient=pat,
+                                action=str(fc.get("action", "")),
+                                polarity=int(fc.get("polarity", 1)),
+                                source="cortex",
+                                raw_text=cleaned,
+                            )
+                            api_fids.append(fr["id"])
+                            api_learned.append(self._frame_to_sentence(fr))
+                        except ValueError:
+                            pass
+                if api_learned:
+                    base_ans = "Learned via Cortex parsing: " + " ".join(api_learned)
+                    res = self._reply(
+                        cleaned,
+                        base_ans,
+                        intent="teach",
+                        mode="stored",
+                        confidence=0.88,
+                        recalled_ids=api_fids,
+                        proof_steps=["Samu Lab Cortex extracted structured role-filler facts."],
+                        learned=api_learned,
+                        cortex_used=True,
+                    )
+                    return self._maybe_enhance_with_cortex(cleaned, res, llm_url, llm_model, llm_key)
+
+        # 9. Honest unknown response (with optional Cortex conversational help)
+        unknown_res = self._reply(
+            cleaned,
+            "I do not have that in my memory yet. Teach me with a clear statement (for example: 'X is a Y' or 'X can Y') and I will store and reason with it.",
+            intent="unknown",
+            mode="unknown",
+            confidence=0.0,
+            proof_steps=["No direct, inherited, or semantic match found in hypergraph."],
+        )
+        return self._maybe_enhance_with_cortex(cleaned, unknown_res, llm_url, llm_model, llm_key)
+
+    def _maybe_enhance_with_cortex(
+        self,
+        user_text: str,
+        result: Dict[str, Any],
+        llm_url: Optional[str],
+        llm_model: Optional[str],
+        llm_key: Optional[str],
+    ) -> Dict[str, Any]:
+        if not llm_url or not llm_model:
+            return result
+        # Gather short context snippets from recalled frames
+        recalled_ctx = []
+        for fid in result.get("recalled_frame_ids", [])[:4]:
+            fr = self.hypergraph.frames.get(fid)
+            if fr:
+                recalled_ctx.append(self._frame_to_sentence(fr))
+
+        polished = cortex_api.realize_with_cortex(
+            user_text=user_text,
+            symbolic_answer=result["response"],
+            proof_steps=result.get("proof_steps", []),
+            recalled_context=recalled_ctx,
+            mode=result.get("mode", "stored"),
+            llm_url=llm_url,
+            llm_model=llm_model,
+            llm_key=llm_key,
+        )
+        if polished:
+            result["response"] = polished
+            result["cortex_used"] = True
+            # Keep the latest episode response synchronized with polished reply
+            if self.episodic.episodes and self.episodic.episodes[-1].get("id") == result.get("episode_id"):
+                self.episodic.episodes[-1]["response"] = polished[:500]
         return result
 
-    ASK_BANK = [
-        "What is your favourite food?",
-        "Do you like mangoes?",
-        "What did you do today?",
-        "Are you happy?",
-        "What is your favourite game?",
-        "Do you have a pet?",
-        "How are you feeling?",
-        "What is something interesting about you?",
-        "What do you like?",
-        "What is your favourite colour?",
-    ]
-
-    ASK_TRIGGERS = {
-        "ask me something", "ask me anything", "ask me a question",
-        "ask question", "ask me", "your question",
-    }
-
-    def _try_ask(self, text):
-        if text.lower().strip() not in self.ASK_TRIGGERS:
-            return None
-        # Priority 1: pending curiosity from past
-        if self.asked_words:
-            target = next(iter(self.asked_words))
-            return f"I'm curious — what is '{target}'? Can you teach me?"
-        # Priority 2: user facts to ask about
-        if not self.fact_store.has("name"):
-            return "What is your name? I want to remember you."
-        if not self.fact_store.has("age"):
-            return "How old are you?"
-        if not self.fact_store.has("location"):
-            return "Where do you live?"
-        # Priority 3: random from bank
-        import random
-        return random.choice(self.ASK_BANK)
-
-    def _try_feedback(self, text):
-        """Detects user corrections and marks previous response as rejected."""
-        try:
-            t_low = text.lower().strip()
-            if not self.episodic.episodes:
-                return None
-        except Exception:
-            return None
-        
-        # Find last valid episode (skip if already feedback prompt)
-        last_ep = self.episodic.episodes[-1]
-        if last_ep.get("feedback") == "rejected":
-            return None
-        
-        # Guard: if NSM's last response was a question, user's "no" is answer, not correction
-        last_response = last_ep.get("response", "")
-        if last_response.rstrip().endswith("?"):
-            return None
-        
-        # Case 1: Pure correction signal (whole message)
-        if t_low.strip(".,!?") in ("wrong", "incorrect", "nope", "thats wrong", "that's wrong"):
-            last_ep["feedback"] = "rejected"
-            self.pending_feedback = last_ep["text"]
-            return f"Sorry! What should I have said for '{last_ep['text']}'?"
-        
-        # Case 2: Inline correction "no, [answer]" / "actually [answer]" / "wrong, [answer]"
-        for marker in ("no,", "wrong,", "incorrect,", "actually,", "actually ", "no ", "wrong "):
-            if t_low.startswith(marker):
-                correct = text[len(marker):].strip()
-                if not correct:
-                    continue
-                last_ep["feedback"] = "rejected"
-                self.pending_feedback = None
-                self.episodic.store(last_ep["text"], self.affect.mood(), correct, 1.0, feedback="accepted")
-                self.affect.event("rewarded", intensity=0.8)
-                return f"Got it! I'll remember: '{correct}' for '{last_ep['text']}'"
-        
-        return None
-
-    def _try_remember(self, text):
-        m = re.match(r"^remember(?:\s+this|\s+that)?[:,]?\s+(.*)", text, re.IGNORECASE)
-        if not m:
-            return None
-            
-        payload = m.group(1).strip()
-        if not payload:
-            return "Remember what? Please tell me."
-            
-        # Replace "you" with "NSM" so it learns correctly about itself
-        import re as _re
-        payload_clean = _re.sub(r'\byou are\b', 'NSM is', payload, flags=_re.IGNORECASE)
-        payload_clean = _re.sub(r'\byour\b', "NSM's", payload_clean, flags=_re.IGNORECASE)
-        payload_clean = _re.sub(r'\byou\b', 'NSM', payload_clean, flags=_re.IGNORECASE)
-        
-        # Pass it to the normal brain pipeline to learn it
-        self._observe_inner(payload_clean)
-        
-        return f"Got it! I will remember: '{payload}'."
-
-    def _try_forget(self, text):
-        t_low = text.lower().strip()
-        m = re.match(r"^(forget|delete|remove)\s+(?:my\s+|about\s+)?([a-zA-Z]+)", t_low)
-        if not m:
-            return None
-            
-        target = m.group(2)
-        
-        # 1. Forget Name/Facts
-        if target == "name":
-            self.fact_store.facts.pop("name", None)
-            return "Got it. I forgot your name."
-        elif target in self.fact_store.facts:
-            del self.fact_store.facts[target]
-            return f"Got it. I forgot your {target}."
-            
-        # 2. Forget general words/definitions/meanings
-        if target in self.definitions:
-            del self.definitions[target]
-        if target in self.meanings:
-            del self.meanings[target]
-        if target in self.lexicon.words:
-            del self.lexicon.words[target]
-            
-        # 3. Forget relations
-        keys_to_del = []
-        for (rel_type, subj), bucket in self.relations.relations.items():
-            if subj == target:
-                keys_to_del.append((rel_type, subj))
-            else:
-                if target in bucket:
-                    del bucket[target]
-        for k in keys_to_del:
-            del self.relations.relations[k]
-            
-        # 4. Forget Episodes (mark rejected so recall skips them)
-        ep_count = 0
-        for ep in self.episodic.episodes:
-            if target in ep.get("text", "").lower():
-                ep["feedback"] = "rejected"
-                ep_count += 1
-                
-        # 5. Forget QA pairs (mark rejected)
-        qa_count = 0
-        for qa in self.qa_pairs:
-            if target in qa.get("pattern", "").lower() or target in qa.get("answer", "").lower():
-                qa["rejected"] = True
-                qa_count += 1
-
-        return f"Got it. I forgot everything about '{target}' (episodes: {ep_count}, qa: {qa_count})."
-
-    def _try_teach_qa(self, text):
-        """Detects 'when I say X, reply Y' patterns and stores them."""
-        t = text.strip()
-        if not t:
-            return None
-        lower = t.lower()
-        prefixes = [
-            "when i say ", "when i ask ", "if i say ", "if i ask ",
-            "if someone ask ", "if someone asks ",
-            "when someone ask ", "when someone asks ",
-            "if a user ask ", "if a user asks ",
-            "when a user ask ", "when a user asks ",
-            "if user ask ", "if user asks ",
-            "when user ask ", "when user asks ",
-        ]
-        rest = None
-        for p in prefixes:
-            if lower.startswith(p):
-                rest = t[len(p):]
-                break
-        if rest is None:
-            return None
-        seps = [
-            " then say ", " then reply ", " then answer ", " then respond ",
-            " then tells them ", " then tell them ",
-            ", reply ", ", answer ", ", say ", ", respond ", ", then ",
-            ",reply ", " reply ", " answer ",
-        ]
-        split_idx = -1
-        sep_len = 0
-        rest_lower = rest.lower()
-        for s in seps:
-            idx = rest_lower.find(s)
-            if idx > 0 and (split_idx == -1 or idx < split_idx):
-                split_idx = idx
-                sep_len = len(s)
-        if split_idx <= 0:
-            return None
-        pat = rest[:split_idx].strip().strip('\'"').strip()
-        ans = rest[split_idx + sep_len:].strip().strip('\'"').strip()
-        if len(pat) < 2 or len(ans) < 1:
-            return None
-        import time as _t
-        self.qa_pairs.append({"pattern": pat, "answer": ans, "created": _t.time()})
-        return f"Got it! Rule saved: When you say '{pat}', I will reply '{ans}'."
-
-    def _lookup_qa_response(self, text):
-        """Returns taught answer if query word-overlap with pattern >= 0.8."""
-        q_words = set(re.findall(r"[a-z]+", text.lower()))
-        if not q_words:
-            return None
-        best = None
-        best_score = 0.0
-        for qa in self.qa_pairs:
-            if qa.get("rejected"):
-                continue
-            pw = set(re.findall(r"[a-z]+", qa.get("pattern", "").lower()))
-            if not pw:
-                continue
-            overlap = len(q_words & pw) / max(len(pw), 1)
-            if overlap > best_score:
-                best_score = overlap
-                best = qa
-        if best and best_score >= 0.8:
-            return best.get("answer")
-        return None
-
-    def _observe_inner(self, text):
-        # Bare topic: user types just "NeuraSaMu" / "Salman" (isolated known term)
-        if not self.pending and not self.pending_feedback and not _is_cancel_or_greeting(text):
-            _clean = text.strip().lower().rstrip("?!.")
-            if 1 <= len(_clean.split()) <= 4 and _clean in self.definitions:
-                _def = self.definitions[_clean]
-                self.episodic.store(text, self.affect.mood(), _def, self.affect.binding_strength())
-                self.affect.tick()
-                return {"turn": self.turn, "text": text, "intent": "question",
-                        "confidence": 1.0, "mood": self.affect.mood(),
-                        "recall": None, "response": _def}
-
-        # L14: Pending Feedback Resolution (User is teaching correction)
-        if self.pending_feedback:
-            original_question = self.pending_feedback
-            correct_answer = text.strip()
-            self.pending_feedback = None
-            self.episodic.store(original_question, self.affect.mood(), correct_answer, 1.0, feedback="accepted")
-            self.affect.event("rewarded", intensity=1.0)
-            self.affect.tick()
-            return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it! For '{original_question}' I will say: '{correct_answer}'"}
-
-        # L14: Feedback Detection (Correction signals)
-        feedback_resp = self._try_feedback(text)
-        if feedback_resp:
-            self.affect.tick()
-            return {"turn": self.turn, "text": text, "intent": "correction", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": feedback_resp}
-
-        # L9: Remember System (Highest Priority)
-        remember_resp = self._try_remember(text)
-        if remember_resp:
-            self.affect.event("rewarded", intensity=0.8)
-            self.affect.tick()
-            self.episodic.store(text, self.affect.mood(), remember_resp, 1.0)
-            return {
-                "turn": self.turn, "text": text, "intent": "statement",
-                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                "response": remember_resp,
-            }
-
-        # L9: Forget System (Highest Priority)
-        forget_resp = self._try_forget(text)
-        if forget_resp:
-            self.affect.event("punished", intensity=0.5)
-            self.affect.tick()
-            self.episodic.store(text, self.affect.mood(), forget_resp, 1.0)
-            return {
-                "turn": self.turn, "text": text, "intent": "statement",
-                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                "response": forget_resp,
-            }
-
-        # NEW: Q&A teach (learn pattern)
-        qa_teach_resp = self._try_teach_qa(text)
-        if qa_teach_resp:
-            self.affect.event("rewarded", intensity=0.6)
-            self.affect.tick()
-            self.episodic.store(text, self.affect.mood(), qa_teach_resp, 1.0)
-            return {"turn": self.turn, "text": text, "intent": "statement",
-                    "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                    "response": qa_teach_resp}
-
-        # NEW: Q&A lookup (answer if pattern matches taught)
-        qa_match = self._lookup_qa_response(text)
-        if qa_match:
-            self.affect.event("familiar_input", intensity=0.8)
-            self.episodic.store(text, self.affect.mood(), qa_match, 0.9)
-            self.affect.tick()
-            return {"turn": self.turn, "text": text, "intent": "question",
-                    "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                    "response": qa_match}
-
-        # L2.5-B: Ask me something (highest priority, overrides pending)
-        ask_resp = self._try_ask(text)
-        if ask_resp:
-            self.affect.event("bonding_moment", intensity=0.5)
-            self.affect.tick()
-            self.episodic.store(text, self.affect.mood(), ask_resp, 0.7)
-            return {
-                "turn": self.turn, "text": text, "intent": "question",
-                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                "response": ask_resp,
-            }
-
-        # L4 Grammar Monster Queries (WH, Yes/No, Negation)
-        meaning = parse_to_meaning(text)
-        if meaning:
-            if meaning[0] == "SVO_QUERY":
-                subj, verb = meaning[1], meaning[2]
-                objs = self.relations.get(verb.upper(), subj)
-                if objs:
-                    v = conjugate_verb(verb, "present", subj)
-                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"{subj.capitalize()} {v} {objs[0]}."}
-                return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"I don't know what {subj} {conjugate_verb(verb, 'present', subj)}."}
-
-            elif meaning[0] == "SVO_YESNO":
-                subj, verb = meaning[1], meaning[2]
-                obj = meaning[3] if len(meaning) > 3 else None
-                objs = self.relations.get(verb.upper(), subj)
-                if obj and obj in objs:
-                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Yes, {subj} {conjugate_verb(verb, 'present', subj)} {obj}."}
-                elif obj:
-                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"No, {subj} does not {verb} {obj}."}
-                else:
-                    return {"turn": self.turn, "text": text, "intent": "question", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"I'm not sure."}
-
-            elif meaning[0] == "NOT_SVO":
-                subj, verb, obj = meaning[1], meaning[2], meaning[3]
-                return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it. I will remember that {subj} does not {verb} {obj}."}
-
-        if self.pending and _is_question_text(text):
-            self.pending = None
-            self._reset_chain()
-            return self._answer_question(text)
-
-        if self.pending and _is_cancel_or_greeting(text):
-            self.pending = None
-            self._reset_chain()
-            # fall through to normal processing
-
-        if self.pending:
-            return self._resolve_pending(text)
-
-        # L2: Fact queries (what is my name?)
-        fkey = fact_query(text)
-        if fkey:
-            val = self.fact_store.get(fkey)
-            response = (format_answer(fkey, val) if val is not None
-                        else f"I don't know your {fkey} yet. Tell me?")
-            wq = _words(text)
-            self._attend(wq)
-            self._bind_words(wq)
-            self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
-            self.affect.tick()
-            return {
-                "turn": self.turn, "text": text, "intent": "question",
-                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                "response": response,
-            }
-
-        # L7: Construction parse (store meaning)
-        self._try_construction(text)
-
-        # Age Attribute Learning: "X age is N" (exact pattern)
-        _aw = text.lower().strip().rstrip("?!.").split()
-        if len(_aw) == 4 and _aw[1] == "age" and _aw[2] == "is" and _aw[3].isdigit():
-            _subj, _age = _aw[0], _aw[3]
-            self.relations.add("HAS_AGE", _subj, _age)
-            return {"turn": self.turn, "text": text, "intent": "statement", "confidence": 1.0, "mood": self.affect.mood(), "recall": None, "response": f"Got it! {_subj.capitalize()} is {_age} years old."}
-
-        # L2: Fact statements (my name is salman)
-        fact = extract_fact(text)
-        if fact:
-            key, val = fact
-            self.fact_store.set(key, val)
-            response = f"Got it! I'll remember your {key} is {val}."
-            ws = _words(text)
-            self._attend(ws)
-            self._bind_words(ws)
-            self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
-            self.affect.event("rewarded", intensity=0.6)
-            self.affect.tick()
-            return {
-                "turn": self.turn, "text": text, "intent": "statement",
-                "confidence": 1.0, "mood": self.affect.mood(), "recall": None,
-                "response": response,
-            }
-
-        learned_resp = self._try_learn_relation(text)
-        if learned_resp:
-            words_lr = _words(text)
-            self._attend(words_lr)
-            self._bind_words(words_lr)
-            self.episodic.store(text, self.affect.mood(), learned_resp, self.affect.binding_strength())
-            self.affect.event("rewarded", intensity=0.5)
-            self.affect.tick()
-            return {
-                "turn": self.turn, "text": text, "intent": "statement",
-                "confidence": 0, "mood": self.affect.mood(), "recall": None,
-                "response": learned_resp,
-            }
-
-        words, intent, conf = self._perceive(text)
-        self._attend(words)
-        recall = self.episodic.recall(text, top_k=1)
-
-        # AGE QUERY CHECK (before auto_vocab, else curiosity hijacks)
-        _wset = set(_words(text))
-        if ("age" in _wset or "old" in _wset) and _is_question_text(text):
-            _skip = {"age", "old", "is", "are", "was", "were", "my", "i", "your", "me",
-                     "how", "what", "whats", "the", "a", "an", "of", "do", "does", "did",
-                     "you", "he", "she", "it", "they", "am"}
-            for _w in _words(text):
-                if _w not in _skip and len(_w) >= 3:
-                    _ages = self.relations.get("HAS_AGE", _w)
-                    if _ages:
-                        resp = f"{_w.capitalize()} is {_ages[0]} years old."
-                        self.episodic.store(text, self.affect.mood(), resp, self.affect.binding_strength())
-                        self.affect.tick()
-                        return {"turn": self.turn, "text": text, "intent": "question",
-                                "confidence": 1.0, "mood": self.affect.mood(),
-                                "recall": None, "response": resp}
-
-        # L13: Auto-vocabulary (silently learn new words first)
-        new_words = self._auto_vocab(text)
-        
-        if parse_query(text) is None:
-            unknown = new_words
-        else:
-            unknown = []
-        if unknown and self.ask_depth < self.max_depth:
-            word = unknown[0]
-            self.pending = (word, text)
-            self.ask_depth += 1
-            self.asked_words.add(word)
-            self.affect.event("new_input", intensity=0.8)
-            known_words = [w for w in words if self.lexicon.has(w)]
-            self._bind_words(known_words)
-            self.episodic.store(text, self.affect.mood(), f"[asked about '{word}']", 0.5)
-            self.affect.tick()
-            return {
-                "turn": self.turn, "text": text, "intent": "question",
-                "confidence": 0, "mood": self.affect.mood(), "recall": None,
-                "response": f"I don't know the word '{word}'. What does it mean?",
-            }
-
-        self._bind_words(words)
-        known_ratio = sum(1 for w in words if self.lexicon.has(w)) / max(len(words), 1)
-        if known_ratio > 0.5 and intent != "unknown":
-            self.affect.event("repeated", intensity=0.6)
-
-        response = self._generate(intent, conf, text, recall)
-        self.episodic.store(text, self.affect.mood(), response, self.affect.binding_strength())
-        self.affect.tick()
-
-        for k in ("curiosity", "attention"):
-            if self.affect.drives[k] > 85:
-                self.affect.drives[k] = 78
-        if self.affect.drives["curiosity"] > 65 and self.turn > 3:
-            self.affect.drives["curiosity"] -= 8
-
+    def state(self) -> Dict[str, Any]:
+        last_ep = self.episodic.get_last_episode(skip_meta=True)
         return {
-            "turn": self.turn, "text": text, "intent": intent,
-            "confidence": round(conf, 3), "mood": self.affect.mood(),
-            "recall": recall[0][0]["text"] if recall else None,
-            "response": response,
+            "version": self.version,
+            "engine": "NSM VB v1.4 (NeuraSaMu)",
+            "frames": len(self.hypergraph.frames),
+            "senses": len(self.hypergraph.senses),
+            "episodes": len(self.episodic.episodes),
+            "schemas": len(self.episodic.schemas),
+            "total_consolidated": self.episodic.total_consolidated_episodes,
+            "turn_count": self.turn_count,
+            "profile": self.profile,
+            "last_episode": {
+                "id": last_ep.get("id"),
+                "mode": last_ep.get("mode"),
+                "confidence": last_ep.get("confidence"),
+                "proof_steps": last_ep.get("proof_steps", []),
+            } if last_ep else None,
         }
 
-    def _maybe_save(self):
-        if self.auto_save_path:
-            try:
-                persistence.save(self, self.auto_save_path)
-            except OSError:
-                pass
-
-    def observe_bulk(self, text, llm_url=None, llm_model=None, llm_key=None):
-        from src.text_utils import split_sentences
-        sentences = split_sentences(text)
-        
-        if len(sentences) <= 1:
-            return self.observe(text, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
-            
-        last_result = None
-        for s in sentences:
-            last_result = self.observe(s, llm_url=llm_url, llm_model=llm_model, llm_key=llm_key)
-            
+    def to_dict(self) -> Dict[str, Any]:
         return {
-            "turn": self.turn,
-            "text": text,
-            "intent": "bulk_learning",
-            "confidence": 1.0,
-            "mood": self.affect.mood(),
-            "recall": None,
-            "response": f"I read all {len(sentences)} sentences and learned from them! (Last update: {last_result['response']})"
+            "nsm_version": self.VERSION,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "turn_count": self.turn_count,
+            "profile": self.profile,
+            "hypergraph": self.hypergraph.to_dict(),
+            "episodic": self.episodic.to_dict(),
         }
 
-    def state(self):
-        return {
-            "turn": self.turn,
-            "mood": self.affect.mood(),
-            "episodes": self.episodic.size(),
-            "vocab": len(self.lexicon.words),
-            "definitions": len(self.definitions),
-            "relations": self.relations.count(),
-            "facts": len(self.fact_store.facts),
-            "pending": self.pending,
-            "max_depth": self.max_depth,
-            "ask_depth": self.ask_depth,
-            "affect": dict(self.affect.drives),
-            "hormones": dict(self.affect.hormones),
-        }
+    @classmethod
+    def from_dict(cls, data: Optional[Dict[str, Any]]) -> "Brain":
+        brain = cls(seed_core=True)
+        if not isinstance(data, dict):
+            return brain
+
+        # Native v1.4 load
+        if data.get("nsm_version") == "1.4":
+            brain.created_at = float(data.get("created_at", brain.created_at))
+            brain.updated_at = float(data.get("updated_at", brain.updated_at))
+            brain.turn_count = int(data.get("turn_count", 0))
+            if isinstance(data.get("profile"), dict):
+                brain.profile.update(data["profile"])
+            loaded_hg = TypedHypergraph.from_dict(data.get("hypergraph"))
+            for sid, sdata in loaded_hg.senses.items():
+                brain.hypergraph.senses[sid] = sdata
+            for fid, fr in loaded_hg.frames.items():
+                brain.hypergraph.frames[fid] = fr
+                brain.hypergraph._index_frame_in_ram(fr)
+            brain.episodic = EpisodicMemory.from_dict(data.get("episodic"))
+            return brain
+
+        # Legacy NSM v1.x auto-migration (facts / relations / memory)
+        brain._migrate_legacy(data)
+        return brain
+
+    def _migrate_legacy(self, data: Dict[str, Any]) -> None:
+        """Import older NSM v1.x JSON brain exports cleanly into v1.4 hypergraph."""
+        # Migrate legacy relations list/dict
+        rels = data.get("relations")
+        if isinstance(rels, list):
+            for item in rels[:1500]:
+                if isinstance(item, dict):
+                    s = item.get("subject") or item.get("src") or item.get("s")
+                    r = item.get("relation") or item.get("rel") or item.get("type") or "RELATED_TO"
+                    o = item.get("object") or item.get("dst") or item.get("o")
+                    pol = -1 if str(r).upper() in {"CANNOT", "IS_NOT"} else 1
+                    norm_r = "CAN" if str(r).upper() == "CANNOT" else str(r).upper()
+                    if s and o:
+                        try:
+                            self.hypergraph.add_frame(norm_r, str(s), str(o), polarity=pol, source="imported")
+                        except ValueError:
+                            pass
+        elif isinstance(rels, dict):
+            for key, vals in rels.items():
+                if isinstance(vals, list):
+                    for item in vals[:300]:
+                        if isinstance(item, dict):
+                            r = item.get("relation") or item.get("rel") or "RELATED_TO"
+                            o = item.get("object") or item.get("target") or item.get("o")
+                            if o:
+                                try:
+                                    self.hypergraph.add_frame(str(r), str(key), str(o), source="imported")
+                                except ValueError:
+                                    pass
+
+        # Migrate legacy flat facts dict
+        facts = data.get("facts")
+        if isinstance(facts, dict):
+            for k, v in list(facts.items())[:500]:
+                if isinstance(v, (str, int, float)):
+                    if k.lower() in {"name", "user_name"}:
+                        self.profile["name"] = str(v)
+                    elif k.lower() in {"age", "user_age"}:
+                        self.profile["age"] = str(v)
+                    else:
+                        try:
+                            self.hypergraph.add_frame("DEFINED_AS", str(k), str(v), source="imported")
+                        except ValueError:
+                            pass

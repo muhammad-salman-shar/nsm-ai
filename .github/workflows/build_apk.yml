@@ -1,4 +1,4 @@
-name: Build NSM APK
+name: Build NSM VB v1.4 APK
 
 on:
   push:
@@ -23,6 +23,11 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Verify NSM v1.4 Core Tests
+        run: |
+          pip install numpy
+          python -m unittest tests.test_stress -v
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -40,5 +45,6 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nsm-vb-apk
+          name: nsm-vb-v1.4-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
