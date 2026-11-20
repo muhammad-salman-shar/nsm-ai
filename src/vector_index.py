@@ -13,8 +13,12 @@ STOP_WORDS = frozenset({
     "a", "an", "the", "is", "am", "are", "was", "were", "be", "been", "being",
     "to", "of", "in", "on", "at", "by", "for", "with", "about", "as", "into",
     "this", "that", "these", "those", "it", "its", "and", "or", "but", "if",
-    "then", "so", "do", "does", "did", "very", "just", "really", "hai", "hain",
-    "ka", "ki", "ke", "ko", "mein", "me", "se", "par", "pe", "aur", "ya", "bhi",
+    "then", "so", "do", "does", "did", "very", "just", "really", "there", "here",
+    "what", "who", "where", "when", "why", "how", "which", "whom", "whose",
+    "can", "could", "would", "should", "will", "shall", "may", "might",
+    "ok", "okay", "hey", "hi", "hello", "please", "tell", "remember", "know",
+    "many", "much", "some", "more", "most", "said", "say", "says",
+    "hai", "hain", "ka", "ki", "ke", "ko", "mein", "me", "se", "par", "pe", "aur", "ya", "bhi",
 })
 
 

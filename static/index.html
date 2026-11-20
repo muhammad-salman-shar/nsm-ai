@@ -803,6 +803,9 @@
       <button class="icon-btn" id="auto-tts-btn" onclick="toggleAutoTTS()" title="Auto Voice">
         <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
       </button>
+      <button class="icon-btn" onclick="downloadCurrentChat()" title="Download Chat (.txt)">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
       <button class="icon-btn" onclick="startNewChat()" title="New Chat">
         <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
@@ -1415,8 +1418,73 @@ function renderChatList() {
   listEl.innerHTML = chats.map(c => `
     <div class="list-item ${c.id === currentChatId ? "active" : ""}" onclick="switchChat('${c.id}')">
       <span class="list-item-title">${escapeHtml(c.title || "Session")}</span>
-      <button class="mini-btn" onclick="event.stopPropagation(); deleteChat('${c.id}')">✕</button>
+      <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">
+        <button class="mini-btn" title="Download .txt" onclick="event.stopPropagation(); downloadChatById('${c.id}')">⬇</button>
+        <button class="mini-btn" title="Delete chat" onclick="event.stopPropagation(); deleteChat('${c.id}')">✕</button>
+      </div>
     </div>`).join("");
+}
+
+function formatChatAsTxt(chat) {
+  const lines = [
+    "NSM VB v1.4 Chat Transcript",
+    "Brain: " + activeBrain,
+    "Chat: " + (chat.title || "Session"),
+    "Exported: " + new Date().toLocaleString(),
+    "----------------------------------------",
+    ""
+  ];
+  (chat.messages || []).forEach(m => {
+    const speaker = m.role === "user" ? "user" : "nsm vb";
+    lines.push(speaker + ": " + (m.text || ""));
+    if (m.role !== "user" && m.mode) {
+      const pct = typeof m.confidence === "number" ? Math.round(m.confidence * 100) + "%" : "";
+      lines.push("[" + m.mode + (pct ? " | " + pct : "") + (m.cortex_used ? " | Samu Lab Cortex" : "") + "]");
+    }
+    if (m.role !== "user" && Array.isArray(m.proof_steps) && m.proof_steps.length) {
+      lines.push("proof: " + m.proof_steps.join(" ; "));
+    }
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function saveTxtFile(content, fileName) {
+  try {
+    if (window.Android && typeof window.Android.saveTextFile === "function") {
+      window.Android.saveTextFile(content, fileName);
+      showToast("Saving " + fileName + "...");
+      return;
+    }
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast("Downloaded " + fileName);
+  } catch (e) {
+    showToast("Download failed: " + e.message);
+  }
+}
+
+function downloadChatById(id) {
+  const chat = getBrainChats().find(c => c.id === id);
+  if (!chat || !chat.messages || !chat.messages.length) {
+    showToast("Chat is empty");
+    return;
+  }
+  const safeTitle = (chat.title || "chat").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 28) || "chat";
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+  const fileName = `NSM_Chat_${activeBrain}_${safeTitle}_${stamp}.txt`;
+  saveTxtFile(formatChatAsTxt(chat), fileName);
+}
+
+function downloadCurrentChat() {
+  downloadChatById(getCurrentChat().id);
 }
 
 function switchChat(id) {

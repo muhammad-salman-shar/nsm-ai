@@ -79,5 +79,29 @@ class TestNSMv14Core(unittest.TestCase):
         self.assertIn("key-value", res_comp["response"].lower())
 
 
+    def test_leadin_question_and_noise_rejection(self):
+        # "Ok what is science" must be treated as a question, NEVER stored as "Ok What is science"
+        res_q = self.brain.observe_bulk("Ok what is science")
+        self.assertEqual(res_q["mode"], "unknown")
+        self.assertNotIn("ok what", self.brain.hypergraph._by_agent)
+
+        # Teach science + branches + compound entity
+        self.brain.observe_bulk("Science is a systematic discipline.")
+        self.brain.observe_bulk("Remember this There are many branches of science, most popular are biology chemistry physics and mathematics.")
+        self.brain.observe_bulk("Human brain is the central organ of the nervous system.")
+
+        # Unknown topics must stay unknown (zero noise bleed)
+        res_unk = self.brain.observe_bulk("What is animal?")
+        self.assertEqual(res_unk["mode"], "unknown")
+
+        # Branches query must return branches, not generic definition
+        res_br = self.brain.observe_bulk("What are branches of science?")
+        self.assertIn("biology", res_br["response"].lower())
+
+        # Partial entity query "What is brain" must find "Human Brain"
+        res_brain = self.brain.observe_bulk("What is brain?")
+        self.assertIn("nervous system", res_brain["response"].lower())
+
+
 if __name__ == "__main__":
     unittest.main()

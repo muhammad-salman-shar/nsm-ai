@@ -104,6 +104,45 @@ def _display_entity(name: str) -> str:
     return " ".join(_ACRONYM_MAP.get(w, w.capitalize()) for w in words)
 
 
+_LEADIN_RE = re.compile(
+    r"^(?:(?:ok|okay|alright|hey|hi|well|so|now|please|bro|yaar|listen|hmm)\b[,:\s-]+)+",
+    re.IGNORECASE,
+)
+_REMEMBER_RE = re.compile(
+    r"^(?:remember(?:\s+this|\s+that)?|note(?:\s+this|\s+that)?|learn(?:\s+this|\s+that)?|save(?:\s+this|\s+that)?)[,:\s-]+",
+    re.IGNORECASE,
+)
+_QUESTION_STARTERS = frozenset({
+    "who", "what", "where", "when", "why", "how", "which", "can", "does", "do", "did", "is", "are",
+})
+_BAD_AGENT_STARTS = frozenset({
+    "it", "this", "that", "these", "those", "there", "here", "they", "them",
+    "what", "who", "where", "when", "why", "how", "which", "remember", "ok", "okay",
+    "if", "when", "while", "because", "although", "coming", "however",
+})
+
+
+def _strip_leadins(text: str) -> str:
+    s = (text or "").strip()
+    s = _LEADIN_RE.sub("", s).strip()
+    return s
+
+
+def _is_valid_agent(agent: str) -> bool:
+    if not agent:
+        return False
+    words = agent.lower().split()
+    if not words or len(words) > 6:
+        return False
+    if words[0] in _BAD_AGENT_STARTS:
+        return False
+    if any(w in _QUESTION_STARTERS for w in words):
+        return False
+    if "(" in agent or ")" in agent or "," in agent:
+        return False
+    return True
+
+
 class Brain:
     """NSM VB v1.4 cognitive engine."""
 
@@ -470,151 +509,152 @@ class Brain:
 
         return None
 
-    def _try_extract_local_facts(self, sentence: str) -> List[Dict[str, Any]]:
-        """Extract role-bound frames from declarative English sentences."""
-        s = sentence.strip().rstrip(".!")
+    def _try_extract_local_facts(
+        self,
+        sentence: str,
+        last_subject: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Extract role-bound frames from declarative English sentences with strict noise guards."""
+        s = _strip_leadins(sentence)
+        s = _REMEMBER_RE.sub("", s).strip().rstrip(".!")
         if not s or s.endswith("?"):
             return []
-        # Skip questions even if user forgot '?'
+
         first_word = s.split()[0].lower()
-        if first_word in {"who", "what", "where", "when", "why", "how", "can", "does", "do", "did", "is", "are"}:
+        if first_word in _QUESTION_STARTERS:
             return []
 
         extracted: List[Dict[str, Any]] = []
 
-        # 1. Negative capability: X cannot / can't Y
-        m = re.match(r"^(.+?)\s+(?:cannot|can't|can not)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            extracted.append({
-                "relation": "CAN",
-                "agent": _clean_phrase(m.group(1)),
-                "action": "can",
-                "patient": _clean_phrase(m.group(2)),
-                "polarity": -1,
-            })
-            return extracted
-
-        # 2. Positive capability: X can Y
-        m = re.match(r"^(.+?)\s+can\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            extracted.append({
-                "relation": "CAN",
-                "agent": _clean_phrase(m.group(1)),
-                "action": "can",
-                "patient": _clean_phrase(m.group(2)),
-                "polarity": 1,
-            })
-            return extracted
-
-        # 3. Age attribute: X is 18 years old
-        m = re.match(r"^(.+?)\s+is\s+(\d{1,3})\s+years?\s+old$", s, re.IGNORECASE)
-        if m:
-            extracted.append({
-                "relation": "HAS_AGE",
-                "agent": _clean_phrase(m.group(1)),
-                "action": "has_age",
-                "patient": m.group(2),
-                "polarity": 1,
-            })
-            return extracted
-
-        # 4. Negative taxonomy: X is not a Y
-        m = re.match(r"^(.+?)\s+(?:is|are)\s+not\s+(?:a|an)?\s*(.+)$", s, re.IGNORECASE)
-        if m:
-            extracted.append({
-                "relation": "IS_A",
-                "agent": _clean_phrase(m.group(1)),
-                "action": "is",
-                "patient": _clean_phrase(m.group(2)),
-                "polarity": -1,
-            })
-            return extracted
-
-        # 5. Taxonomy / definition: X is a Y / X is Y
-        m = re.match(r"^(.+?)\s+(?:is|are)\s+(a|an)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            extracted.append({
-                "relation": "IS_A",
-                "agent": _clean_phrase(m.group(1)),
-                "action": "is",
-                "patient": _clean_phrase(m.group(3)),
-                "polarity": 1,
-            })
-            return extracted
-
-        m = re.match(r"^(.+?)\s+(?:is|are|means)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag = _clean_phrase(m.group(1))
-            pat = _clean_phrase(m.group(2))
-            if ag and pat and ag.lower() not in {"it", "this", "that", "there"}:
+        # 0a. Branches / types / kinds pattern:
+        # e.g. "There are many branches of science, most popular are biology chemistry physics and mathematics"
+        m_br = re.search(
+            r"(?:branches|types|kinds|fields|categories)\s+of\s+([a-zA-Z][a-zA-Z0-9 '-]{1,35}?)(?:[,;:\s]+(?:most\s+popular|main|major|key|common|such\s+as|include|including)?\s*(?:are|include|includes|:))\s+(.+)$",
+            s,
+            re.IGNORECASE,
+        )
+        if m_br:
+            ag = _clean_phrase(m_br.group(1))
+            pat = _clean_phrase(m_br.group(2))
+            if _is_valid_agent(ag) and pat:
                 extracted.append({
-                    "relation": "DEFINED_AS",
+                    "relation": "HAS_BRANCHES",
                     "agent": ag,
-                    "action": "is",
+                    "action": "has_branches",
                     "patient": pat,
                     "polarity": 1,
                 })
                 return extracted
 
+        # 0b. Multi-sentence pronoun coreference: "In cosmology, it is estimated..." -> resolve "it" to last_subject
+        if last_subject and _is_valid_agent(last_subject):
+            m_ctx_it = re.match(r"^(?:in\s+[a-zA-Z '-]+,\s*)?it\s+(is|are|can|cannot|can't|has|have)\s+(.+)$", s, re.IGNORECASE)
+            if m_ctx_it:
+                s = f"{last_subject} {m_ctx_it.group(1)} {m_ctx_it.group(2)}"
+
+        # 1. Negative capability: X cannot / can't Y
+        m = re.match(r"^(.+?)\s+(?:cannot|can't|can not)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
+            if _is_valid_agent(ag) and pat:
+                extracted.append({"relation": "CAN", "agent": ag, "action": "can", "patient": pat, "polarity": -1})
+            return extracted
+
+        # 2. Positive capability: X can Y
+        m = re.match(r"^(.+?)\s+can\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
+            if _is_valid_agent(ag) and pat:
+                extracted.append({"relation": "CAN", "agent": ag, "action": "can", "patient": pat, "polarity": 1})
+            return extracted
+
+        # 3. Age attribute: X is 18 years old
+        m = re.match(r"^(.+?)\s+is\s+(\d{1,3})\s+years?\s+old$", s, re.IGNORECASE)
+        if m:
+            ag = _clean_phrase(m.group(1))
+            if _is_valid_agent(ag):
+                extracted.append({"relation": "HAS_AGE", "agent": ag, "action": "has_age", "patient": m.group(2), "polarity": 1})
+            return extracted
+
+        # 4. Negative taxonomy: X is not a Y
+        m = re.match(r"^(.+?)\s+(?:is|are)\s+not\s+(?:a|an)?\s*(.+)$", s, re.IGNORECASE)
+        if m:
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
+            if _is_valid_agent(ag) and pat:
+                extracted.append({"relation": "IS_A", "agent": ag, "action": "is", "patient": pat, "polarity": -1})
+            return extracted
+
+        # 5. Taxonomy / definition: X is a Y / X is Y
+        m = re.match(r"^(.+?)\s+(?:is|are)\s+(a|an)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(3))
+            if _is_valid_agent(ag) and pat:
+                rel = "IS_A" if len(pat.split()) <= 4 else "DEFINED_AS"
+                extracted.append({"relation": rel, "agent": ag, "action": "is", "patient": pat, "polarity": 1})
+            return extracted
+
+        m = re.match(r"^(.+?)\s+(?:is|are|means)\s+(.+)$", s, re.IGNORECASE)
+        if m:
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
+            if _is_valid_agent(ag) and pat:
+                extracted.append({"relation": "DEFINED_AS", "agent": ag, "action": "is", "patient": pat, "polarity": 1})
+            return extracted
+
         # 6. Possession: X has / have Y
         m = re.match(r"^(.+?)\s+(?:has|have)\s+(.+)$", s, re.IGNORECASE)
         if m:
-            extracted.append({
-                "relation": "HAS",
-                "agent": _clean_phrase(m.group(1)),
-                "action": "has",
-                "patient": _clean_phrase(m.group(2)),
-                "polarity": 1,
-            })
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
+            if _is_valid_agent(ag) and pat:
+                extracted.append({"relation": "HAS", "agent": ag, "action": "has", "patient": pat, "polarity": 1})
             return extracted
 
         # 7. Location: X lives in / is located in Y
         m = re.match(r"^(.+?)\s+(?:lives?\s+in|located\s+in|stays?\s+in)\s+(.+)$", s, re.IGNORECASE)
         if m:
-            extracted.append({
-                "relation": "LOCATED_IN",
-                "agent": _clean_phrase(m.group(1)),
-                "action": "lives_in",
-                "patient": _clean_phrase(m.group(2)),
-                "polarity": 1,
-            })
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
+            if _is_valid_agent(ag) and pat:
+                extracted.append({"relation": "LOCATED_IN", "agent": ag, "action": "lives_in", "patient": pat, "polarity": 1})
             return extracted
 
         # 8. Creation: X created / built / made / founded Y
         m = re.match(r"^(.+?)\s+(created|built|made|founded|developed)\s+(.+)$", s, re.IGNORECASE)
         if m:
-            extracted.append({
-                "relation": "CREATED",
-                "agent": _clean_phrase(m.group(1)),
-                "action": _canon_verb(m.group(2)),
-                "patient": _clean_phrase(m.group(3)),
-                "polarity": 1,
-            })
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(3))
+            if _is_valid_agent(ag) and pat:
+                extracted.append({
+                    "relation": "CREATED",
+                    "agent": ag,
+                    "action": _canon_verb(m.group(2)),
+                    "patient": pat,
+                    "polarity": 1,
+                })
             return extracted
 
-        # 9. Role-bound SVO event (solves Binding Problem: "dog bit man" != "man bit dog")
+        # 9. Role-bound SVO event
         m = re.match(
             r"^([a-zA-Z][a-zA-Z0-9 '-]{1,35}?)\s+(bit|bite|bites|ate|eats|chased|chases|killed|kills|helped|helps|loved|loves|hated|hates|liked|likes|hit|hits|saw|sees|taught|teaches|broke|fixed|wrote)\s+([a-zA-Z][a-zA-Z0-9 '-]{1,40})$",
             s,
             re.IGNORECASE,
         )
         if m:
+            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(3))
             verb_raw = m.group(2).lower()
-            extracted.append({
-                "relation": "ACTION",
-                "agent": _clean_phrase(m.group(1)),
-                "action": _canon_verb(verb_raw),
-                "patient": _clean_phrase(m.group(3)),
-                "polarity": 1,
-                "modifier": verb_raw,
-            })
+            if _is_valid_agent(ag) and pat:
+                extracted.append({
+                    "relation": "ACTION",
+                    "agent": ag,
+                    "action": _canon_verb(verb_raw),
+                    "patient": pat,
+                    "polarity": 1,
+                    "modifier": verb_raw,
+                })
             return extracted
 
         return extracted
 
     def _answer_query(self, text: str) -> Optional[Dict[str, Any]]:
         """Proof-tracked symbolic question answering across roles, capabilities, and definitions."""
-        q = text.strip().rstrip("?!. ")
+        q = _strip_leadins(text).rstrip("?!. ")
         low = q.lower()
 
         # 1. Self & NeuraSaMu identity queries
@@ -790,13 +830,41 @@ class Brain:
                     proof_steps=res["proof_steps"],
                 )
 
-        # 7. Definition / Topic query: "What is X?" / "Who is X?" / compound questions
+        # 7a. Attribute-of-entity query (e.g. "What are branches of science?" / "How many branches of science?")
+        m_attr = re.match(
+            r"^(?:what\s+(?:are|is)|how\s+many|list|name)\s+(?:the\s+)?(branches|types|kinds|parts|fields|categories)\s+of\s+(.+)$",
+            q,
+            re.IGNORECASE,
+        )
+        if m_attr:
+            attr_word = m_attr.group(1).lower()
+            ent = _clean_phrase(m_attr.group(2))
+            br_frames = self.hypergraph.get_frames_for_agent(ent, relation="HAS_BRANCHES")
+            if br_frames:
+                return self._summarize_entity_frames(text, ent, br_frames)
+            # Also check any frame mentioning branches/types of that entity
+            all_ent = self.hypergraph.get_frames_for_agent(ent)
+            matching_attr = [
+                f for f in all_ent
+                if attr_word in f.get("patient", "").lower() or attr_word in f.get("raw_text", "").lower()
+            ]
+            if matching_attr:
+                return self._summarize_entity_frames(text, ent, matching_attr)
+            # Check frames where patient mentions "branch of <ent>" (e.g. Physics is branch of science)
+            sub_matches = [
+                f for f in self.hypergraph.frames.values()
+                if f"branch of {normalize_entity(ent)}" in f.get("patient", "").lower()
+                or f"branches of {normalize_entity(ent)}" in f.get("raw_text", "").lower()
+            ]
+            if sub_matches:
+                return self._summarize_entity_frames(text, ent, sub_matches[:6])
+
+        # 7b. Definition / Topic query: "What is X?" / "Who is X?" / compound questions
         m = re.match(r"^(?:what|who)\s+(?:is|are)\s+(.+)$", q, re.IGNORECASE)
         if not m:
             m = re.match(r"^(?:tell me about|explain|define|describe)\s+(.+)$", q, re.IGNORECASE)
         if m:
             raw_topic = m.group(1)
-            # Handle compound phrasing like "a hash table and what is it a type of"
             primary_part = re.split(r"\s+(?:and|or)\s+(?:what|who|how|why|where)\b", raw_topic, maxsplit=1, flags=re.IGNORECASE)[0]
             topic = _clean_phrase(primary_part)
             frames = self.hypergraph.get_frames_for_agent(topic)
@@ -805,14 +873,28 @@ class Brain:
             rev_frames = self.hypergraph.get_frames_for_patient(topic)
             if rev_frames:
                 return self._summarize_entity_frames(text, topic, rev_frames)
-            # Longest known entity match inside the query text
-            known_agents = sorted(self.hypergraph._by_agent.keys(), key=len, reverse=True)
-            q_low = low
-            for ent in known_agents:
-                if len(ent) >= 2 and re.search(r"\b" + re.escape(ent) + r"\b", q_low):
-                    ent_frames = self.hypergraph.get_frames_for_agent(ent)
-                    if ent_frames:
-                        return self._summarize_entity_frames(text, ent, ent_frames)
+            # Whole-word match where topic is part of a known compound entity (e.g. "brain" -> "human brain")
+            t_low = normalize_entity(topic)
+            if t_low and len(t_low) >= 3:
+                partial_matches = [
+                    ent for ent in self.hypergraph._by_agent.keys()
+                    if re.search(r"\b" + re.escape(t_low) + r"\b", ent)
+                ]
+                if partial_matches:
+                    partial_matches.sort(key=len)
+                    collected = []
+                    for ent in partial_matches[:2]:
+                        collected.extend(self.hypergraph.get_frames_for_agent(ent)[:2])
+                    if collected:
+                        return self._summarize_entity_frames(text, partial_matches[0], collected)
+            # Longest known entity match inside compound questions (skip if query asked for specific unknown attribute like "branches of X")
+            if not re.search(r"\b(?:branches|types|kinds|parts|causes|effects)\s+of\b", low):
+                known_agents = sorted(self.hypergraph._by_agent.keys(), key=len, reverse=True)
+                for ent in known_agents:
+                    if len(ent) >= 2 and re.search(r"\b" + re.escape(ent) + r"\b", low):
+                        ent_frames = self.hypergraph.get_frames_for_agent(ent)
+                        if ent_frames:
+                            return self._summarize_entity_frames(text, ent, ent_frames)
 
         # 8. Bare topic query (1-3 words matching a known entity)
         if len(q.split()) <= 3:
@@ -821,16 +903,29 @@ class Brain:
             if frames:
                 return self._summarize_entity_frames(text, topic, frames)
 
-        # 9. Semantic vector recall across hypergraph & past episodes (handles paraphrases!)
-        sem_hits = self.hypergraph.semantic_search(q, top_k=4, min_score=0.28)
-        if sem_hits:
-            top_frames = [fr for fr, _ in sem_hits[:3]]
-            top_score = sem_hits[0][1]
+        # 9. Semantic vector recall with lexical overlap guard (prevents noise on truly unknown topics)
+        from src.hypergraph import tokenize_content
+        q_tokens = set(tokenize_content(q))
+        sem_hits = self.hypergraph.semantic_search(q, top_k=5, min_score=0.32)
+        filtered_hits = []
+        for fr, sc in sem_hits:
+            if not _is_valid_agent(fr.get("agent", "")):
+                continue
+            f_blob = f"{fr.get('agent', '')} {fr.get('patient', '')} {fr.get('raw_text', '')}"
+            f_tokens = set(tokenize_content(f_blob))
+            overlap = q_tokens.intersection(f_tokens)
+            # Require at least one content-word overlap OR very high semantic vector match
+            if overlap or sc >= 0.48:
+                filtered_hits.append((fr, sc))
+
+        if filtered_hits:
+            top_frames = [fr for fr, _ in filtered_hits[:3]]
+            top_score = filtered_hits[0][1]
             snippets = [self._frame_to_sentence(fr) for fr in top_frames]
             fids = [fr["id"] for fr in top_frames]
             proofs = [
                 f"Vector recall ({sc:.2f}): {fr['agent']} {fr['relation']} {fr['patient']}"
-                for fr, sc in sem_hits[:3]
+                for fr, sc in filtered_hits[:3]
             ]
             return self._reply(
                 text,
@@ -843,19 +938,21 @@ class Brain:
             )
 
         # Check episodic recall if user is asking something similar to a past conversation
-        ep_hits = self.episodic.recall_similar(q, top_k=2, min_score=0.38)
+        ep_hits = self.episodic.recall_similar(q, top_k=2, min_score=0.42)
         if ep_hits:
             best_ep, ep_score = ep_hits[0]
             if best_ep.get("response") and best_ep.get("mode") != "unknown":
-                return self._reply(
-                    text,
-                    f"From a similar earlier episode: {best_ep['response']}",
-                    intent="episodic_recall",
-                    mode="derived",
-                    confidence=round(ep_score * 0.85, 3),
-                    recalled_ids=best_ep.get("recalled_frame_ids", []),
-                    proof_steps=[f"Matched prior episode {best_ep['id']} (sim={ep_score:.2f})."],
-                )
+                ep_tokens = set(tokenize_content(best_ep.get("user_input", "")))
+                if q_tokens.intersection(ep_tokens):
+                    return self._reply(
+                        text,
+                        f"From a similar earlier episode: {best_ep['response']}",
+                        intent="episodic_recall",
+                        mode="derived",
+                        confidence=round(ep_score * 0.85, 3),
+                        recalled_ids=best_ep.get("recalled_frame_ids", []),
+                        proof_steps=[f"Matched prior episode {best_ep['id']} (sim={ep_score:.2f})."],
+                    )
 
         return None
 
@@ -873,6 +970,8 @@ class Brain:
             return f"{ag} {'can' if pol > 0 else 'cannot'} {pat}."
         if rel == "HAS":
             return f"{ag} has {pat}."
+        if rel == "HAS_BRANCHES":
+            return f"Major branches of {ag} include {pat}."
         if rel == "HAS_AGE":
             return f"{ag} is {pat} years old."
         if rel == "LOCATED_IN":
@@ -950,12 +1049,17 @@ class Brain:
         learned_summaries: List[str] = []
         rejected_notes: List[str] = []
         question_parts: List[str] = []
+        last_subject: Optional[str] = None
 
         for part in parts:
-            if part.endswith("?") or part.split()[0].lower() in {"who", "what", "where", "when", "why", "how", "can", "does", "do", "did"}:
-                question_parts.append(part)
+            stripped_part = _strip_leadins(part)
+            if not stripped_part:
                 continue
-            facts = self._try_extract_local_facts(part)
+            first_tok = stripped_part.split()[0].lower()
+            if stripped_part.endswith("?") or first_tok in _QUESTION_STARTERS:
+                question_parts.append(stripped_part)
+                continue
+            facts = self._try_extract_local_facts(part, last_subject=last_subject)
             for fc in facts:
                 try:
                     fr = self.hypergraph.add_frame(
@@ -970,6 +1074,7 @@ class Brain:
                     )
                     learned_frames.append(fr)
                     learned_summaries.append(self._frame_to_sentence(fr))
+                    last_subject = fc["agent"]
                 except ValueError as ve:
                     rejected_notes.append(str(ve))
 

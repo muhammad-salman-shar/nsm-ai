@@ -2,9 +2,13 @@ package com.nsm.vb;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.speech.tts.TextToSpeech;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -19,6 +23,8 @@ import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Locale;
@@ -194,6 +200,61 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(Intent.createChooser(shareIntent, "Export NSM Brain"));
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "Export failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }
+
+        @JavascriptInterface
+        public void saveTextFile(String content, String fileName) {
+            String safeName = (fileName == null || fileName.trim().isEmpty())
+                    ? "NSM_Chat.txt"
+                    : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            if (!safeName.endsWith(".txt")) {
+                safeName = safeName + ".txt";
+            }
+            final String finalName = safeName;
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.DISPLAY_NAME, finalName);
+                    values.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
+                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/NSM_VB");
+                    Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (uri != null) {
+                        try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                            if (os != null) {
+                                os.write(content.getBytes(StandardCharsets.UTF_8));
+                                os.flush();
+                            }
+                        }
+                        runOnUiThread(() -> Toast.makeText(
+                                MainActivity.this,
+                                "Saved to Downloads/NSM_VB/" + finalName,
+                                Toast.LENGTH_LONG
+                        ).show());
+                        return;
+                    }
+                }
+                // Fallback for older Android versions: write to cache and open Share sheet
+                File file = new File(getCacheDir(), finalName);
+                try (FileWriter writer = new FileWriter(file)) {
+                    writer.write(content);
+                }
+                Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                        MainActivity.this,
+                        getPackageName() + ".fileprovider",
+                        file
+                );
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("text/plain");
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(shareIntent, "Save or Share Chat Log"));
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(
+                        MainActivity.this,
+                        "Save failed: " + e.getMessage(),
+                        Toast.LENGTH_LONG
+                ).show());
             }
         }
     }
