@@ -683,8 +683,9 @@ class TypedHypergraph:
             if (ag == a and pat == b) or (ag == b and pat == a):
                 direct_comp.append(fr)
 
-        frames_a = self.get_frames_for_agent(a)[:3]
-        frames_b = self.get_frames_for_agent(b)[:3]
+        direct_ids = {f["id"] for f in direct_comp}
+        frames_a = [f for f in self.get_frames_for_agent(a) if f["id"] not in direct_ids][:3]
+        frames_b = [f for f in self.get_frames_for_agent(b) if f["id"] not in direct_ids][:3]
 
         if not direct_comp and not frames_a and not frames_b:
             return {

@@ -1,10 +1,10 @@
-"""Natural Conversational Realizer for NSM VB v1.5 (English + Hinglish).
+"""Natural Conversational English Realizer for NSM VB v1.5.
 
 Converts verified symbolic hypergraph frames and reasoning traces into clean,
-human-like responses tailored to all 16 question types — with zero robotic boilerplate.
+natural English responses tailored to all 16 question types.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 ACRONYM_MAP: Dict[str, str] = {
     "cpu": "CPU",
@@ -37,7 +37,7 @@ def display_entity(name: str) -> str:
 
 
 def frame_to_sentence(fr: Dict[str, Any], lang: str = "english") -> str:
-    """Render any of the 14+ typed hypergraph relations into a clean sentence."""
+    """Render any of the 14+ typed hypergraph relations into a clean English sentence."""
     ag = display_entity(fr.get("agent", ""))
     pat = (fr.get("patient") or "").strip()
     rel = (fr.get("relation") or "").upper()
@@ -45,93 +45,43 @@ def frame_to_sentence(fr: Dict[str, Any], lang: str = "english") -> str:
     mod = (fr.get("modifier") or "").strip()
 
     if rel == "IS_A":
-        if lang == "hinglish":
-            return f"{ag} ek {pat} {'nahi ' if pol < 0 else ''}hai."
         return f"{ag} is {'not ' if pol < 0 else ''}a {pat}."
-
     if rel == "DEFINED_AS":
-        if lang == "hinglish":
-            return f"{ag} {pat} {'nahi ' if pol < 0 else ''}hota hai."
         return f"{ag} is {'not ' if pol < 0 else ''}{pat}."
-
     if rel == "ALSO_KNOWN_AS":
-        if lang == "hinglish":
-            return f"{ag} ko {display_entity(pat)} bhi kehte hain."
         return f"{ag} is also known as {display_entity(pat)}."
-
     if rel == "CAN":
-        if lang == "hinglish":
-            return f"{ag} {pat} {'kar sakta hai' if pol > 0 else 'nahi kar sakta'}."
         return f"{ag} {'can' if pol > 0 else 'cannot'} {pat}."
-
     if rel == "USED_FOR":
-        if lang == "hinglish":
-            return f"{ag} {pat} ke liye use hota hai."
         return f"{ag} is used for {pat}."
-
     if rel == "CAUSES":
-        if lang == "hinglish":
-            return f"{ag} ki wajah se {pat} hota hai."
         return f"{ag} causes {pat}."
-
     if rel == "WORKS_BY":
-        if lang == "hinglish":
-            return f"{ag} {pat} karke kaam karta hai."
         return f"{ag} works by {pat}."
-
     if rel == "IF_THEN":
         raw_ag = (fr.get("agent") or "").strip()
-        if lang == "hinglish":
-            return f"Agar {raw_ag}, toh {pat}."
         return f"If {raw_ag}, then {pat}."
-
     if rel == "HAS_PART":
-        if lang == "hinglish":
-            return f"{ag} {pat} se bana hota hai."
         return f"{ag} consists of {pat}."
-
     if rel == "HAS_BRANCHES":
-        if lang == "hinglish":
-            return f"{ag} ke main branches/types {pat} hain."
         return f"Major branches of {ag} include {pat}."
-
     if rel == "HAS_COUNT":
-        if lang == "hinglish":
-            return f"{ag} mein {pat} hote hain."
         return f"{ag} has {pat}."
-
     if rel == "HAS":
-        if lang == "hinglish":
-            return f"{ag} mein {pat} hota hai."
         return f"{ag} has {pat}."
-
     if rel == "HAS_AGE":
-        if lang == "hinglish":
-            return f"{ag} ki umar {pat} saal hai."
         return f"{ag} is {pat} years old."
-
     if rel == "LOCATED_IN":
-        if lang == "hinglish":
-            return f"{ag} {pat} mein located hai."
         return f"{ag} is located in {pat}."
-
     if rel == "CREATED":
         act = fr.get("action") or "created"
-        if lang == "hinglish":
-            return f"{ag} ne {display_entity(pat)} banaya tha."
         return f"{ag} {act} {display_entity(pat)}."
-
     if rel == "COMPARED_TO":
         comp_word = mod or "different from"
-        pat_disp = display_entity(pat)
-        if lang == "hinglish":
-            return f"{ag}, {pat_disp} se {comp_word} hota hai."
-        return f"{ag} is {comp_word} than {pat_disp}."
-
+        return f"{ag} is {comp_word} than {display_entity(pat)}."
     if rel == "ACTION":
         act = mod or fr.get("action") or "acted on"
         return f"{ag} {act} {pat}."
-
     return f"{ag} {rel.lower().replace('_', ' ')} {pat}."
 
 
@@ -139,7 +89,7 @@ def realize_frames(frames: List[Dict[str, Any]], lang: str = "english", max_item
     seen = set()
     parts: List[str] = []
     for fr in frames[:max_items]:
-        sent = frame_to_sentence(fr, lang=lang)
+        sent = frame_to_sentence(fr)
         if sent not in seen:
             seen.add(sent)
             parts.append(sent)
@@ -159,29 +109,18 @@ def realize_verify(
     frames = res.get("frames", [])
 
     if mode == "contradicted":
-        if lang == "hinglish":
-            return f"Meri memory mein {disp_s} aur '{target}' ko lekar do alag baatein hain. Sahi baat batao taaki main update kar doon."
-        return f"My memory has conflicting evidence on whether {disp_s} matches '{target}'. Tell me which one is right so I can resolve it."
-
+        return (
+            f"My memory has conflicting evidence on whether {disp_s} matches '{target}'. "
+            "Tell me which one is right so I can resolve it."
+        )
     if mode in {"stored", "derived"}:
-        evidence = frame_to_sentence(frames[0], lang=lang) if frames else ""
+        evidence = frame_to_sentence(frames[0]) if frames else ""
         if pol > 0:
-            if lang == "hinglish":
-                return f"Haan, {evidence} (confidence {pct}%)."
             return f"Yes — {evidence} (confidence {pct}%)."
-        if lang == "hinglish":
-            return f"Nahi, {evidence} (confidence {pct}%)."
         return f"No — {evidence} (confidence {pct}%)."
-
-    # Honest unknown with helpful context if subject is partially known
     if frames:
-        known_txt = realize_frames(frames, lang=lang, max_items=2)
-        if lang == "hinglish":
-            return f"Mere paas pakka proof nahi hai ki {disp_s} '{target}' hai ya nahi. Itna zaroor pata hai: {known_txt}"
+        known_txt = realize_frames(frames, max_items=2)
         return f"I do not have direct confirmation that {disp_s} is '{target}'. What I do know: {known_txt}"
-
-    if lang == "hinglish":
-        return f"Abhi mujhe {disp_s} ke baare mein itna nahi pata. Agar tum sikha do toh yaad rakh lunga."
     return f"I do not have stored evidence about whether {disp_s} is '{target}'. Teach me and I will remember it."
 
 
@@ -200,22 +139,11 @@ def realize_choice(
     b_neg = res_b.get("mode") in {"stored", "derived"} and res_b.get("polarity", 0) < 0
 
     if a_pos and not b_pos:
-        if lang == "hinglish":
-            return f"Meri memory ke hisaab se {disp_s} ek {option_a} hai" + (f", {option_b} nahi." if b_neg else ".")
         return f"Based on my memory, {disp_s} is a {option_a}" + (f", not a {option_b}." if b_neg else ".")
-
     if b_pos and not a_pos:
-        if lang == "hinglish":
-            return f"Meri memory ke hisaab se {disp_s} ek {option_b} hai" + (f", {option_a} nahi." if a_neg else ".")
         return f"Based on my memory, {disp_s} is a {option_b}" + (f", not a {option_a}." if a_neg else ".")
-
     if a_pos and b_pos:
-        if lang == "hinglish":
-            return f"Dono sahi lag rahe hain: {disp_s} {option_a} bhi hai aur {option_b} bhi."
         return f"According to my memory, {disp_s} matches both {option_a} and {option_b}."
-
-    if lang == "hinglish":
-        return f"Mujhe abhi pakka nahi pata ki {disp_s} {option_a} hai ya {option_b}. Ek baar bata do, main save kar lunga."
     return f"I do not have enough stored facts yet to decide whether {disp_s} is {option_a} or {option_b}."
 
 
@@ -228,32 +156,31 @@ def realize_comparison(comp: Dict[str, Any], lang: str = "english") -> str:
     shared = comp.get("shared_categories", [])
 
     if comp.get("mode") == "unknown":
-        if lang == "hinglish":
-            return f"Abhi mere paas {a} aur {b} dono ke baare mein facts nahi hain compare karne ke liye. Inke baare mein thoda sikha do!"
         return f"I do not have stored facts on {a} and {b} yet to compare them. Teach me a fact about each and ask again."
 
     lines: List[str] = []
-    if direct:
-        lines.append(realize_frames(direct, lang=lang, max_items=2))
-    if shared:
-        cats = ", ".join(shared)
-        if lang == "hinglish":
-            lines.append(f"Dono {cats} ki category mein aate hain.")
-        else:
-            lines.append(f"Both belong to: {cats}.")
-    if fa:
-        lines.append(realize_frames(fa, lang=lang, max_items=2))
-    elif lang == "hinglish":
-        lines.append(f"({a} ke baare mein abhi koi detail stored nahi hai.)")
-    else:
-        lines.append(f"(I have no stored details on {a} yet.)")
+    seen = set()
 
-    if fb:
-        lines.append(realize_frames(fb, lang=lang, max_items=2))
-    elif lang == "hinglish":
-        lines.append(f"({b} ke baare mein abhi koi detail stored nahi hai.)")
-    else:
-        lines.append(f"(I have no stored details on {b} yet.)")
+    def _add(text: str) -> None:
+        if text and text not in seen:
+            seen.add(text)
+            lines.append(text)
+
+    for fr in direct[:2]:
+        _add(frame_to_sentence(fr))
+    if shared:
+        _add(f"Both belong to: {', '.join(shared)}.")
+    for fr in fa[:2]:
+        _add(frame_to_sentence(fr))
+    for fr in fb[:2]:
+        _add(frame_to_sentence(fr))
+
+    # Only mention missing details if an entity has zero facts AND no direct comparison exists
+    if not direct:
+        if not fa:
+            _add(f"(I have no stored details on {a} yet.)")
+        if not fb:
+            _add(f"(I have no stored details on {b} yet.)")
 
     return " ".join(lines)
 
@@ -265,15 +192,9 @@ def realize_examples(category: str, res: Dict[str, Any], lang: str = "english") 
 
     if examples:
         nice_list = ", ".join(display_entity(e) for e in examples)
-        if lang == "hinglish":
-            return f"{disp_c} ke examples meri memory mein yeh hain: {nice_list}."
         return f"Examples of {disp_c} in my memory include: {nice_list}."
-
     if frames:
-        return realize_frames(frames, lang=lang, max_items=3)
-
-    if lang == "hinglish":
-        return f"Abhi meri memory mein {disp_c} ka koi example stored nahi hai. Jaise 'X ek {category} hai' bol ke sikha sakte ho."
+        return realize_frames(frames, max_items=3)
     return f"I do not have any examples of {disp_c} stored yet. You can teach me with 'X is a {category}'."
 
 
@@ -282,25 +203,8 @@ def realize_unknown(
     subject: str = "",
     lang: str = "english",
 ) -> str:
-    """Context-aware, human-like fallback when memory does not hold the answer."""
+    """Context-aware, natural English fallback when memory does not hold the answer."""
     disp = display_entity(subject) if subject else ""
-
-    if lang == "hinglish":
-        if qtype == "QUERY_PURPOSE" and disp:
-            return f"Mujhe abhi nahi pata ki {disp} kis kaam aata hai. Batao '{disp} ... ke liye use hota hai' aur main yaad rakh lunga."
-        if qtype == "QUERY_HOW" and disp:
-            return f"Mujhe abhi {disp} ke kaam karne ka tareeka nahi pata. Sikhao '{disp} ... karke kaam karta hai'."
-        if qtype == "QUERY_CAUSE" and disp:
-            return f"Mujhe abhi {disp} ki wajah nahi pata. Sikha sakte ho ki '... ki wajah se {subject} hota hai'."
-        if qtype == "QUERY_IF_THEN" and subject:
-            return f"Mujhe abhi nahi pata ki agar '{subject}' ho toh kya hoga. Sikhao: 'Agar {subject}, toh ...'."
-        if qtype == "QUERY_PARTS" and disp:
-            return f"Abhi {disp} ke hisse ya components mere paas stored nahi hain. Bata do, main memory mein lock kar dunga."
-        if disp:
-            return f"Mere paas abhi {disp} ke baare mein koi memory nahi hai. Ek chhoti si line mein sikha do, agli baar turant yaad rakhunga."
-        return "Yeh baat abhi meri memory mein nahi hai. Simple English ya Hinglish mein sikha do, main samajh ke store kar lunga."
-
-    # Natural English fallbacks
     if qtype == "QUERY_PURPOSE" and disp:
         return f"I have not learned what {disp} is used for yet. Tell me '{disp} is used for ...' and I will remember."
     if qtype == "QUERY_HOW" and disp:
@@ -313,4 +217,4 @@ def realize_unknown(
         return f"I do not know the parts or branches of {disp} yet. Tell me '{disp} consists of ...' and I will bind it."
     if disp:
         return f"I do not have any stored knowledge about {disp} yet. Teach me a fact about it and I will reason with it right away."
-    return "I do not have that in my memory yet. Teach me naturally in English or Hinglish and I will bind it into my hypergraph."
+    return "I do not have that in my memory yet. Teach me in natural English and I will bind it into my hypergraph."

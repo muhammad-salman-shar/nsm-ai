@@ -1,10 +1,10 @@
-"""Compositional Neuro-Symbolic Language Parser for NSM VB v1.5.
+"""Compositional Neuro-Symbolic English Language Parser for NSM VB v1.5.
 
 Zero external dependencies (stdlib only). Handles:
-- Conversational wrapper & filler stripping (English + Hinglish)
+- Conversational wrapper & filler stripping
 - All 16 core question types with clean slot extraction
 - All 14 typed declarative statement relations (multi-sentence safe)
-- Active-topic slot-level coreference ("it", "its", "iska", "uska")
+- Active-topic slot-level coreference ("it", "its", "this", "that")
 - Runtime loading of portable JSON custom patterns (`language_extensions`)
 """
 
@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, Pattern, Tuple
 
 from src import language_matrix as lm
 
-_WORD_RE = re.compile(r"[a-zA-Z0-9_']+")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?;\n])\s+|\n+")
 
 
@@ -41,9 +40,7 @@ def canon_verb(verb: str) -> str:
 
 
 def detect_language(text: str) -> str:
-    tokens = {t.lower() for t in _WORD_RE.findall(text or "")}
-    if tokens.intersection(lm.HINGLISH_MARKERS):
-        return "hinglish"
+    """NSM VB v1.5 is standardized on pure English."""
     return "english"
 
 
@@ -115,7 +112,7 @@ class ParsedTurn:
 
 
 class CompositionalParser:
-    """Compiled, extensible English + Hinglish parser for NSM VB v1.5."""
+    """Compiled, extensible English parser for NSM VB v1.5."""
 
     def __init__(self, custom_patterns: Optional[List[Dict[str, Any]]] = None):
         self._lead_re: List[Pattern[str]] = [
@@ -147,7 +144,7 @@ class CompositionalParser:
         ]
 
     def load_custom_patterns(self, custom_patterns: List[Dict[str, Any]]) -> int:
-        """Safely compile and prepend portable JSON custom rules (future skill/pattern packs)."""
+        """Safely compile and prepend portable JSON custom rules (skill/pattern packs)."""
         loaded = 0
         for item in custom_patterns:
             if not isinstance(item, dict) or not item.get("pattern"):
@@ -167,7 +164,6 @@ class CompositionalParser:
 
     def strip_wrappers(self, text: str) -> str:
         s = re.sub(r"\s+", " ", (text or "").strip())
-        # Iteratively strip leading conversational fillers and indirect wrappers
         for _ in range(4):
             prev = s
             for rx in self._lead_re:
@@ -210,12 +206,10 @@ class CompositionalParser:
         if not raw:
             return None
 
-        lang = detect_language(raw)
         stripped = self.strip_wrappers(raw).rstrip("?!. ")
         if not stripped:
             return None
 
-        # Check explicit question rules in strict priority order
         for rule, rx in self._question_rules:
             m = rx.match(stripped)
             if not m:
@@ -236,7 +230,6 @@ class CompositionalParser:
                 if opt_b:
                     options.append(opt_b)
 
-            # Handle compound phrasing in QUERY_DEFINE (e.g. "a hash table and what is it a type of")
             if rule["qtype"] == "QUERY_DEFINE" and subj_raw:
                 subj_raw = re.split(
                     r"\s+(?:and|or)\s+(?:what|who|how|why|where)\b",
@@ -275,7 +268,7 @@ class CompositionalParser:
                 action=action,
                 options=options,
                 relation=rel,
-                language=lang,
+                language="english",
                 coref_resolved=coref_used,
                 meta=meta,
             )
@@ -296,15 +289,11 @@ class CompositionalParser:
         if not cleaned:
             return None
 
-        # Never treat clear questions as declarative facts (even if '?' was omitted)
         first_tok = cleaned.split()[0].lower()
-        if first_tok in lm.QUESTION_STARTERS and first_tok != "agar":
-            return None
-        # Guard Hinglish questions ending in "kya hai / kya hota hai / kyun hai"
-        if re.search(r"\b(?:kya\s+(?:hai|hota\s+hai|hoti\s+hai|hote\s+hain|hoga|farq|fark)|kyun\s+hota|kaise\s+kaam|kisne\s+banaya)\b", cleaned, re.IGNORECASE):
+        if first_tok in lm.QUESTION_STARTERS:
             return None
 
-        # Multi-sentence pronoun coreference: "In cosmology, it is estimated..."
+        # Multi-sentence pronoun coreference
         if last_subject and is_valid_agent(last_subject):
             m_it = re.match(
                 r"^(?:in\s+[a-zA-Z '-]+,\s*)?it\s+(is|are|can|cannot|can't|has|have|works\s+by|is\s+used\s+for)\s+(.+)$",
@@ -359,8 +348,7 @@ class CompositionalParser:
         active_topic: Optional[str] = None,
     ) -> ParsedTurn:
         raw = (text or "").strip()
-        lang = detect_language(raw)
-        turn = ParsedTurn(raw_text=raw, language=lang, active_topic_out=active_topic)
+        turn = ParsedTurn(raw_text=raw, language="english", active_topic_out=active_topic)
         if not raw:
             return turn
 
@@ -368,14 +356,16 @@ class CompositionalParser:
         running_topic = active_topic
 
         for part in parts:
-            # Explicit question mark or question-pattern match goes to question parser first
             stripped = self.strip_wrappers(part)
             first_tok = stripped.split()[0].lower() if stripped else ""
             looks_like_q = (
                 part.endswith("?")
-                or (first_tok in lm.QUESTION_STARTERS and first_tok != "agar")
-                or bool(re.search(r"\b(?:kya|kyun|kyon|kaise|kahan|kab|kaun|kitne|kitna|farq|fark|misaal|batao|samjhao|vs\.?|versus)\b", stripped, re.IGNORECASE))
-                or stripped.lower().rstrip("?!. ") in {"tell me more", "what else", "anything else", "more details", "elaborate", "explain simply"}
+                or (first_tok in lm.QUESTION_STARTERS)
+                or bool(re.search(r"\b(?:vs\.?|versus)\b", stripped, re.IGNORECASE))
+                or stripped.lower().rstrip("?!. ") in {
+                    "tell me more", "what else", "anything else",
+                    "more details", "elaborate", "explain simply",
+                }
             )
 
             if looks_like_q:
@@ -393,7 +383,6 @@ class CompositionalParser:
                     running_topic = ps.agent
                 continue
 
-            # Final fallback: try question parser even without '?' (e.g. "Compare CPU and RAM")
             pq_fallback = self.parse_question(part, active_topic=running_topic)
             if pq_fallback:
                 turn.questions.append(pq_fallback)
