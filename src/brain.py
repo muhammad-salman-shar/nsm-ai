@@ -984,9 +984,7 @@ class Brain:
             return self._maybe_enhance_with_cortex(cleaned, self_res, llm_url, llm_model, llm_key)
 
         # Split input at full stops / sentence boundaries so each sentence is a discrete token unit
-        sentence_units = [s.strip() for s in re.split(r"(?<=[.!?;
-])\s+|
-+", cleaned) if s.strip()]
+        sentence_units = [s.strip() for s in re.split(r"(?<=[.!?;\n])\s+|\n+", cleaned) if s.strip()]
 
         # MULTI-SENTENCE MODE (2+ sentences): filter each sentence one by one against memory
         if len(sentence_units) >= 2:
