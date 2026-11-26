@@ -29,9 +29,10 @@ jobs:
           python -m unittest tests.test_stress tests.test_parser_v15 tests.test_v15_e2e -v
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: 8.5
+          cache-provider: basic
 
       - name: Sync NSM Code to Android
         run: |
@@ -43,7 +44,7 @@ jobs:
         run: gradle assembleDebug --stacktrace
 
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nsm-vb-v1.5-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
