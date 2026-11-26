@@ -26,7 +26,7 @@ jobs:
       - name: Verify NSM v1.5 Core Tests
         run: |
           pip install numpy
-          python -m unittest tests.test_stress tests.test_parser_v15 tests.test_v15_e2e tests.test_skills_v15 -v
+          python -m unittest tests.test_stress tests.test_parser_v15 tests.test_v15_e2e tests.test_skills_v15 tests.test_sentence_matcher -v
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6

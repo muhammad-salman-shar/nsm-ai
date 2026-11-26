@@ -452,6 +452,124 @@ class TypedHypergraph:
         results.sort(key=lambda item: item[1], reverse=True)
         return results
 
+    def sentence_token_match(
+        self,
+        sentence: str,
+        min_ref_pct: float = 0.20,
+        direct_lift_pct: float = 0.40,
+    ) -> Dict[str, Any]:
+        """Treat a full sentence as a token unit and score word-level overlap against stored memory sentences.
+
+        Rules:
+        - match_pct >= 0.40 (40%+): Direct sentence lift ('direct_lift', mode='stored')
+        - 0.20 <= match_pct < 0.40 (20%-39%): Reference match ('reference_match', mode='derived')
+        - match_pct < 0.20: Unknown ('none', mode='unknown')
+        """
+        from src import realizer as _realizer
+
+        raw = (sentence or "").strip()
+        if not raw:
+            return {"mode": "unknown", "tier": "none", "match_pct": 0.0, "frames": [], "used_frame_ids": [], "confidence": 0.0, "proof_steps": []}
+
+        # Extract meaningful word tokens from the input sentence
+        q_words = set(tokenize_content(raw))
+        # Preserve important 2-letter technical/domain words while ignoring glue stopwords
+        glue = {
+            "is", "am", "are", "was", "were", "be", "to", "of", "in", "on", "at", "by",
+            "an", "as", "or", "if", "it", "my", "me", "we", "us", "he", "she", "do", "so",
+            "no", "up", "go", "ok", "hi",
+        }
+        for tok in re.findall(r"[a-z0-9]+", raw.lower()):
+            if len(tok) == 2 and tok not in glue:
+                q_words.add(tok)
+
+        if not q_words:
+            q_words = {tok for tok in re.findall(r"[a-z0-9]+", raw.lower()) if len(tok) >= 2}
+        if not q_words:
+            return {"mode": "unknown", "tier": "none", "match_pct": 0.0, "frames": [], "used_frame_ids": [], "confidence": 0.0, "proof_steps": []}
+
+        scored: List[Tuple[float, float, Dict[str, Any], str]] = []
+        for fr in self.frames.values():
+            ag = (fr.get("agent") or "").strip()
+            if not ag:
+                continue
+            mem_sent = _realizer.frame_to_sentence(fr)
+            mem_blob = f"{ag} {fr.get('patient', '')} {mem_sent}"
+            m_words = set(tokenize_content(mem_blob))
+            for tok in re.findall(r"[a-z0-9]+", mem_blob.lower()):
+                if len(tok) == 2 and tok not in glue:
+                    m_words.add(tok)
+            if not m_words:
+                continue
+
+            matched = q_words.intersection(m_words)
+            if not matched:
+                continue
+
+            input_pct = len(matched) / len(q_words)
+            mem_pct = len(matched) / len(m_words)
+            # Bidirectional coverage when 2+ words match so long queries against concise memories still lift cleanly
+            eff_pct = max(input_pct, 0.85 * mem_pct) if len(matched) >= 2 else input_pct
+            eff_pct = min(1.0, round(eff_pct, 4))
+
+            if eff_pct >= min_ref_pct:
+                b_conf = self.bayesian_confidence(fr)
+                rank_score = eff_pct + (0.10 * mem_pct) + (0.05 * b_conf)
+                scored.append((rank_score, eff_pct, fr, mem_sent))
+
+        if not scored:
+            return {
+                "mode": "unknown",
+                "tier": "none",
+                "match_pct": 0.0,
+                "frames": [],
+                "used_frame_ids": [],
+                "confidence": 0.0,
+                "proof_steps": [f"Sentence-token scan: 0% >= 20% threshold for '{raw[:60]}'."],
+            }
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        _, best_pct, best_fr, best_sent = scored[0]
+        pct_label = round(best_pct * 100, 1)
+
+        if best_pct >= direct_lift_pct:
+            conf = round(min(0.98, 0.65 + 0.33 * best_pct), 3)
+            return {
+                "mode": "stored",
+                "tier": "direct_lift",
+                "match_pct": best_pct,
+                "frames": [best_fr],
+                "used_frame_ids": [best_fr["id"]],
+                "confidence": conf,
+                "sentence": best_sent,
+                "proof_steps": [
+                    f"Sentence-token direct lift ({pct_label}% >= 40%): '{best_sent}'"
+                ],
+            }
+
+        # 20% to 39%: answer from the highest-scoring memory reference(s)
+        chosen_frames = [best_fr]
+        chosen_ids = [best_fr["id"]]
+        proofs = [f"Sentence-token reference match ({pct_label}% >= 20%): '{best_sent}'"]
+        if len(scored) > 1 and scored[1][1] >= min_ref_pct and scored[1][2]["id"] != best_fr["id"]:
+            sec_pct, sec_fr, sec_sent = scored[1][1], scored[1][2], scored[1][3]
+            if sec_sent != best_sent:
+                chosen_frames.append(sec_fr)
+                chosen_ids.append(sec_fr["id"])
+                proofs.append(f"Secondary memory reference ({round(sec_pct * 100, 1)}%): '{sec_sent}'")
+
+        conf = round(min(0.79, 0.45 + 0.70 * best_pct), 3)
+        return {
+            "mode": "derived",
+            "tier": "reference_match",
+            "match_pct": best_pct,
+            "frames": chosen_frames,
+            "used_frame_ids": chosen_ids,
+            "confidence": conf,
+            "sentence": _realizer.realize_frames(chosen_frames, max_items=2),
+            "proof_steps": proofs,
+        }
+
     def resolve_alias(self, term: str) -> str:
         """Resolve an entity name or alias (ALSO_KNOWN_AS) to its primary graph node."""
         norm = normalize_entity(term)

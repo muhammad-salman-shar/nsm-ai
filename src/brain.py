@@ -983,6 +983,146 @@ class Brain:
         if self_res:
             return self._maybe_enhance_with_cortex(cleaned, self_res, llm_url, llm_model, llm_key)
 
+        # Split input at full stops / sentence boundaries so each sentence is a discrete token unit
+        sentence_units = [s.strip() for s in re.split(r"(?<=[.!?;
+])\s+|
++", cleaned) if s.strip()]
+
+        # MULTI-SENTENCE MODE (2+ sentences): filter each sentence one by one against memory
+        if len(sentence_units) >= 2:
+            learned_frames: List[Dict[str, Any]] = []
+            learned_summaries: List[str] = []
+            rejected_notes: List[str] = []
+            collected_answers: List[str] = []
+            seen_answers = set()
+            collected_fids: List[str] = []
+            collected_proofs: List[str] = []
+            confs: List[float] = []
+            any_stored = False
+
+            for idx, sent in enumerate(sentence_units, 1):
+                stripped_s = self.parser.strip_wrappers(sent)
+                first_tok = stripped_s.split()[0].lower() if stripped_s else ""
+                is_explicit_q = sent.endswith("?") or (first_tok in {
+                    "who", "what", "where", "when", "why", "how", "which",
+                    "can", "could", "does", "do", "did", "is", "are", "was", "were",
+                })
+
+                # 1) Check declarative teaching statement first if not an explicit question
+                if not is_explicit_q:
+                    ps = self.parser.parse_statement(sent, last_subject=self.active_topic)
+                    if ps:
+                        try:
+                            fr = self.hypergraph.add_frame(
+                                relation=ps.relation,
+                                agent=ps.agent,
+                                patient=ps.patient,
+                                action=ps.action,
+                                modifier=ps.modifier,
+                                polarity=ps.polarity,
+                                source="user",
+                                raw_text=ps.raw_text,
+                            )
+                            learned_frames.append(fr)
+                            learned_summaries.append(realizer.frame_to_sentence(fr))
+                            if ps.relation != "IF_THEN":
+                                self.active_topic = fr["agent"]
+                            continue
+                        except ValueError as ve:
+                            rejected_notes.append(str(ve))
+                            continue
+
+                # 2) Otherwise filter this sentence against enabled workflows, structured questions, and sentence-token matcher
+                wf_s = skill_engine.match_skill_workflow(self, sent)
+                if wf_s:
+                    ans = wf_s["response"]
+                    if ans not in seen_answers:
+                        seen_answers.add(ans)
+                        collected_answers.append(ans)
+                    confs.append(wf_s["confidence"])
+                    any_stored = True
+                    collected_proofs.append(f"Sentence {idx} workflow match: {wf_s['proof_steps'][0]}")
+                    continue
+
+                pq = self.parser.parse_question(sent, active_topic=self.active_topic)
+                if pq:
+                    if pq.subject and pq.subject not in {"it", "its", "this", "that", "they", "them"}:
+                        self.active_topic = pq.subject
+                    q_res = self._dispatch_question(pq, sent)
+                    if q_res and q_res.get("mode") in {"stored", "derived", "contradicted"}:
+                        ans = q_res["response"]
+                        if ans not in seen_answers:
+                            seen_answers.add(ans)
+                            collected_answers.append(ans)
+                        for fid in q_res.get("recalled_frame_ids", []):
+                            if fid not in collected_fids:
+                                collected_fids.append(fid)
+                        confs.append(q_res.get("confidence", 0.8))
+                        if q_res.get("mode") == "stored":
+                            any_stored = True
+                        collected_proofs.append(f"Sentence {idx} structured match: {ans}")
+                        continue
+
+                # 3) Sentence-token percentage match (20% reference / 40%+ direct sentence lift)
+                stm = self.hypergraph.sentence_token_match(sent)
+                if stm["mode"] in {"stored", "derived"}:
+                    ans = stm["sentence"]
+                    if ans not in seen_answers:
+                        seen_answers.add(ans)
+                        collected_answers.append(ans)
+                    for fid in stm["used_frame_ids"]:
+                        if fid not in collected_fids:
+                            collected_fids.append(fid)
+                    confs.append(stm["confidence"])
+                    if stm["mode"] == "stored":
+                        any_stored = True
+                    collected_proofs.append(f"Sentence {idx}: {stm['proof_steps'][0]}")
+                else:
+                    collected_proofs.append(f"Sentence {idx}: no reference >= 20% found.")
+
+            # Pure teaching turn (all sentences were statements)
+            if learned_frames and not collected_answers:
+                fids = [f["id"] for f in learned_frames]
+                proofs = [f"Stored role-bound frame: {f['agent']} {f['relation']} {f['patient']} (pol={f['polarity']})" for f in learned_frames]
+                reply_text = (
+                    f"Learned and bound in memory: {learned_summaries[0]}"
+                    if len(learned_summaries) == 1
+                    else f"Learned {len(learned_summaries)} structured facts: " + " ".join(learned_summaries[:4])
+                )
+                res = self._reply(
+                    cleaned, reply_text, intent="teach", mode="stored",
+                    confidence=0.95, recalled_ids=fids, proof_steps=proofs,
+                    learned=learned_summaries,
+                )
+                return self._maybe_enhance_with_cortex(cleaned, res, llm_url, llm_model, llm_key)
+
+            # Combined or multi-sentence reference recall
+            if collected_answers:
+                body = " ".join(collected_answers)
+                if learned_summaries:
+                    body = f"Learned {len(learned_summaries)} fact(s). " + body
+                avg_conf = sum(confs) / len(confs) if confs else 0.75
+                res = self._reply(
+                    cleaned,
+                    body,
+                    intent="multi_sentence_recall",
+                    mode="stored" if any_stored else "derived",
+                    confidence=avg_conf,
+                    recalled_ids=collected_fids + [f["id"] for f in learned_frames],
+                    proof_steps=collected_proofs,
+                    learned=learned_summaries,
+                )
+                return self._maybe_enhance_with_cortex(cleaned, res, llm_url, llm_model, llm_key)
+
+            if rejected_notes:
+                return self._reply(
+                    cleaned,
+                    f"I skipped that because: {rejected_notes[0]}",
+                    intent="reject", mode="unknown", confidence=0.9,
+                    proof_steps=rejected_notes,
+                )
+
+        # SINGLE-SENTENCE MODE
         wf_hit = skill_engine.match_skill_workflow(self, cleaned)
         if wf_hit:
             wf_res = self._reply(
@@ -996,9 +1136,9 @@ class Brain:
             return self._maybe_enhance_with_cortex(cleaned, wf_res, llm_url, llm_model, llm_key)
 
         parsed = self.parser.parse_turn(cleaned, active_topic=self.active_topic)
-        learned_frames: List[Dict[str, Any]] = []
-        learned_summaries: List[str] = []
-        rejected_notes: List[str] = []
+        learned_frames = []
+        learned_summaries = []
+        rejected_notes = []
 
         for st in parsed.statements:
             try:
@@ -1022,6 +1162,29 @@ class Brain:
         if parsed.questions:
             primary_q = parsed.questions[-1]
             q_res = self._dispatch_question(primary_q, cleaned)
+            if q_res is not None and q_res.get("mode") in {"stored", "derived", "contradicted"}:
+                if learned_summaries:
+                    q_res["learned"] = learned_summaries
+                    q_res["response"] = f"Learned {len(learned_summaries)} fact(s). " + q_res["response"]
+                return self._maybe_enhance_with_cortex(cleaned, q_res, llm_url, llm_model, llm_key)
+
+            # For open queries (non-strict-polar), try Sentence-Token Matcher (20% ref / 40%+ direct lift)
+            if primary_q.qtype not in {"QUERY_CAN", "QUERY_VERIFY", "QUERY_CHOICE"}:
+                stm = self.hypergraph.sentence_token_match(cleaned)
+                if stm["mode"] in {"stored", "derived"}:
+                    if stm["frames"]:
+                        self.active_topic = stm["frames"][0]["agent"]
+                    stm_res = self._reply(
+                        cleaned,
+                        stm["sentence"],
+                        intent="sentence_token_recall",
+                        mode=stm["mode"],
+                        confidence=stm["confidence"],
+                        recalled_ids=stm["used_frame_ids"],
+                        proof_steps=stm["proof_steps"],
+                    )
+                    return self._maybe_enhance_with_cortex(cleaned, stm_res, llm_url, llm_model, llm_key)
+
             if q_res is None:
                 q_res = self._semantic_and_episodic_fallback(cleaned)
             if q_res is None:
@@ -1041,10 +1204,7 @@ class Brain:
         if learned_frames:
             fids = [f["id"] for f in learned_frames]
             proofs = [f"Stored role-bound frame: {f['agent']} {f['relation']} {f['patient']} (pol={f['polarity']})" for f in learned_frames]
-            if len(learned_summaries) == 1:
-                reply_text = f"Learned and bound in memory: {learned_summaries[0]}"
-            else:
-                reply_text = f"Learned {len(learned_summaries)} structured facts: " + " ".join(learned_summaries[:4])
+            reply_text = f"Learned and bound in memory: {learned_summaries[0]}"
             res = self._reply(
                 cleaned, reply_text, intent="teach", mode="stored",
                 confidence=0.95, recalled_ids=fids, proof_steps=proofs,
@@ -1059,6 +1219,22 @@ class Brain:
                 intent="reject", mode="unknown", confidence=0.9,
                 proof_steps=rejected_notes,
             )
+
+        # Single free-form sentence: score every word against stored memory sentences (20% / 40%+ rules)
+        stm_free = self.hypergraph.sentence_token_match(cleaned)
+        if stm_free["mode"] in {"stored", "derived"}:
+            if stm_free["frames"]:
+                self.active_topic = stm_free["frames"][0]["agent"]
+            stm_res = self._reply(
+                cleaned,
+                stm_free["sentence"],
+                intent="sentence_token_recall",
+                mode=stm_free["mode"],
+                confidence=stm_free["confidence"],
+                recalled_ids=stm_free["used_frame_ids"],
+                proof_steps=stm_free["proof_steps"],
+            )
+            return self._maybe_enhance_with_cortex(cleaned, stm_res, llm_url, llm_model, llm_key)
 
         sem_res = self._semantic_and_episodic_fallback(cleaned)
         if sem_res:
