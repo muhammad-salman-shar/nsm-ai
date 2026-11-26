@@ -1,56 +1,38 @@
-"""NSM VB v1.4 - NeuraSaMu Neuro-Symbolic Cognitive Brain.
+"""NSM VB v1.5 - NeuraSaMu Neuro-Symbolic Cognitive Brain.
 
 Core Architecture:
-1. Typed Role-Filler Hypergraph (binding-safe, sense-disambiguated, Bayesian confidence).
-2. Two-Tier Fast RAM Vector Index + Cold SQLite Persistence.
-3. Proof-Tracked Defeasible Reasoning + Surgical Credit Assignment.
-4. Episodic Recall Trace + Offline Sleep Consolidation Engine.
-5. Optional Samu Lab / OpenAI-Compatible API Language Cortex.
+1. Compositional Language Parser (16 question types x 14 relations, English + Hinglish,
+   conversational wrapper stripping, active-topic coreference, portable JSON extensions).
+2. Typed Role-Filler Hypergraph (binding-safe, sense-disambiguated, Bayesian confidence,
+   alias resolution, causal/consequence/comparison/verification/examples reasoning).
+3. Natural Conversational Realizer (English + Hinglish, non-robotic context-aware fallbacks).
+4. Episodic Recall Trace + Surgical Credit Assignment + Offline Sleep Consolidation.
+5. Future-proof Portable Contract (v1.5 brain + skills + language_extensions + MCP slots).
 """
 
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from src import cortex_api
+from src import cortex_api, realizer
 from src.episodic import EpisodicMemory
-from src.hypergraph import TypedHypergraph, normalize_entity
-
-# Irregular verb normalization map for clean role-bound SVO matching
-_VERB_LEMMA = {
-    "bit": "bite", "bites": "bite", "bitten": "bite",
-    "ate": "eat", "eats": "eat", "eaten": "eat",
-    "chased": "chase", "chases": "chase",
-    "built": "build", "builds": "build",
-    "created": "create", "creates": "create",
-    "made": "make", "makes": "make",
-    "wrote": "write", "writes": "write", "written": "write",
-    "killed": "kill", "kills": "kill",
-    "helped": "help", "helps": "help",
-    "loved": "love", "loves": "love",
-    "hated": "hate", "hates": "hate",
-    "liked": "like", "likes": "like",
-    "saw": "see", "sees": "see", "seen": "see",
-    "hit": "hit", "hits": "hit",
-    "taught": "teach", "teaches": "teach",
-    "broke": "break", "breaks": "break", "broken": "break",
-    "fixed": "fix", "fixes": "fix",
-}
+from src.hypergraph import TypedHypergraph, normalize_entity, tokenize_content
+from src.parser import CompositionalParser, ParsedQuestion, canon_verb, clean_phrase, detect_language, is_valid_agent
 
 _GREETINGS = frozenset({
     "hi", "hello", "hey", "yo", "hola", "salam", "assalam", "assalamualaikum",
-    "good morning", "good evening", "good afternoon", "gm", "sup",
+    "good morning", "good evening", "good afternoon", "gm", "sup", "namaste",
 })
 
 _NEG_FEEDBACK_PHRASES = (
     "that's wrong", "that is wrong", "you are wrong", "wrong answer",
     "incorrect", "galat", "nope wrong", "no that's wrong", "not right",
-    "bad answer", "false",
+    "bad answer", "false", "galat hai", "ye galat hai",
 )
 
 _POS_FEEDBACK_PHRASES = (
     "good job", "correct", "that's right", "that is right", "exact",
-    "spot on", "sahi", "well done", "nice answer", "perfect",
+    "spot on", "sahi", "sahi hai", "well done", "nice answer", "perfect", "bilkul sahi",
 )
 
 _SELF_TRIGGERS = (
@@ -58,101 +40,28 @@ _SELF_TRIGGERS = (
     "who created you", "who built you", "about yourself", "tell me about you",
     "what is nsm", "who is your creator", "who is your founder",
     "what is neurasamu", "tell me about neurasamu",
+    "tum kaun ho", "aap kaun ho", "tumhara naam", "tumhe kisne banaya",
+    "nsm kisne banaya", "nsm vb kisne banaya", "neurasamu kya hai", "nsm kya hai",
 )
 
-
-def _canon_verb(verb: str) -> str:
-    v = normalize_entity(verb)
-    if v in _VERB_LEMMA:
-        return _VERB_LEMMA[v]
-    if len(v) > 4 and v.endswith("ed"):
-        return v[:-2]
-    if len(v) > 3 and v.endswith("s") and not v.endswith("ss"):
-        return v[:-1]
-    return v
-
-
-def _clean_phrase(s: str) -> str:
-    s = re.sub(r"\s+", " ", (s or "").strip())
-    s = s.strip(" .,!?;:\"'`")
-    # Strip leading articles for clean canonical entities
-    s = re.sub(r"^(?:a|an|the)\s+", "", s, flags=re.IGNORECASE)
-    return s.strip()
-
-
-_ACRONYM_MAP = {
-    "cpu": "CPU",
-    "ram": "RAM",
-    "gpu": "GPU",
-    "api": "API",
-    "sql": "SQL",
-    "sqlite": "SQLite",
-    "ai": "AI",
-    "os": "OS",
-    "nsm": "NSM",
-    "nsm vb": "NSM VB",
-    "neurasamu": "NeuraSaMu",
-    "big o notation": "Big O notation",
-}
-
-
-def _display_entity(name: str) -> str:
-    low = (name or "").strip().lower()
-    if low in _ACRONYM_MAP:
-        return _ACRONYM_MAP[low]
-    words = low.split()
-    return " ".join(_ACRONYM_MAP.get(w, w.capitalize()) for w in words)
-
-
-_LEADIN_RE = re.compile(
-    r"^(?:(?:ok|okay|alright|hey|hi|well|so|now|please|bro|yaar|listen|hmm)\b[,:\s-]+)+",
-    re.IGNORECASE,
-)
-_REMEMBER_RE = re.compile(
-    r"^(?:remember(?:\s+this|\s+that)?|note(?:\s+this|\s+that)?|learn(?:\s+this|\s+that)?|save(?:\s+this|\s+that)?)[,:\s-]+",
-    re.IGNORECASE,
-)
-_QUESTION_STARTERS = frozenset({
-    "who", "what", "where", "when", "why", "how", "which", "can", "does", "do", "did", "is", "are",
-})
-_BAD_AGENT_STARTS = frozenset({
-    "it", "this", "that", "these", "those", "there", "here", "they", "them",
-    "what", "who", "where", "when", "why", "how", "which", "remember", "ok", "okay",
-    "if", "when", "while", "because", "although", "coming", "however",
-})
-
-
-def _strip_leadins(text: str) -> str:
-    s = (text or "").strip()
-    s = _LEADIN_RE.sub("", s).strip()
-    return s
-
-
-def _is_valid_agent(agent: str) -> bool:
-    if not agent:
-        return False
-    words = agent.lower().split()
-    if not words or len(words) > 6:
-        return False
-    if words[0] in _BAD_AGENT_STARTS:
-        return False
-    if any(w in _QUESTION_STARTERS for w in words):
-        return False
-    if "(" in agent or ")" in agent or "," in agent:
-        return False
-    return True
+_CREATOR_VERBS = frozenset({"create", "make", "build", "found", "develop", "invent", "design"})
 
 
 class Brain:
-    """NSM VB v1.4 cognitive engine."""
+    """NSM VB v1.5 cognitive engine."""
 
-    VERSION = "1.4"
+    VERSION = "1.5"
 
     def __init__(self, seed_core: bool = True):
         self.version = self.VERSION
         self.hypergraph = TypedHypergraph(max_hot_frames=5000)
         self.episodic = EpisodicMemory(max_raw_episodes=180)
         self.profile: Dict[str, str] = {}
+        self.active_topic: Optional[str] = None
+        # Future-proof slots for portable Skill Packs, MCP servers & Pattern Packs
+        self.skills: Dict[str, Any] = {"installed": {}, "mcp_servers": {}}
+        self.language_extensions: Dict[str, Any] = {"custom_patterns": []}
+        self.parser = CompositionalParser()
         self.created_at: float = time.time()
         self.updated_at: float = self.created_at
         self.turn_count: int = 0
@@ -160,16 +69,17 @@ class Brain:
             self._seed_core_knowledge()
 
     def _seed_core_knowledge(self) -> None:
-        """Seed immutable core NeuraSaMu & NSM VB v1.4 identity knowledge."""
+        """Seed immutable core NeuraSaMu & NSM VB v1.5 identity knowledge."""
         core_facts = [
             ("IS_A", "nsm vb", "neuro-symbolic virtual brain", "", 1, "NSM VB is a neuro-symbolic virtual brain built by NeuraSaMu."),
-            ("DEFINED_AS", "nsm vb", "version 1.4 cognitive architecture with typed hypergraph memory, episodic recall trace, surgical credit assignment, and sleep consolidation", "", 1, "NSM VB v1.4 architecture overview."),
+            ("DEFINED_AS", "nsm vb", "version 1.5 cognitive architecture with compositional English and Hinglish understanding, typed hypergraph reasoning, episodic recall trace, surgical credit assignment, and sleep consolidation", "", 1, "NSM VB v1.5 architecture overview."),
+            ("ALSO_KNOWN_AS", "nsm vb", "nsm", "", 1, "NSM VB is also known as NSM."),
             ("CREATED", "muhammad salman shar", "nsm vb", "created", 1, "Muhammad Salman Shar created NSM VB."),
             ("CREATED", "muhammad salman shar", "neurasamu", "founded", 1, "Muhammad Salman Shar founded NeuraSaMu."),
             ("IS_A", "muhammad salman shar", "founder of neurasamu and creator of nsm vb", "", 1, "Muhammad Salman Shar (Salman / Akira) is the founder of NeuraSaMu."),
             ("IS_A", "neurasamu", "independent ai research and software development lab", "", 1, "NeuraSaMu is an independent AI research and software lab at neurasamu.com."),
             ("HAS", "neurasamu", "official website neurasamu.com", "", 1, "NeuraSaMu website is neurasamu.com."),
-            ("CAN", "nsm vb", "learn role-bound facts, reason with proof traces, recall past episodes, and consolidate memory offline", "", 1, "NSM VB core capabilities."),
+            ("CAN", "nsm vb", "learn role-bound facts, reason across 16 question types in English and Hinglish, explain proof traces, recall past episodes, and consolidate memory offline", "", 1, "NSM VB core capabilities."),
         ]
         for rel, ag, pat, act, pol, raw in core_facts:
             try:
@@ -224,6 +134,7 @@ class Brain:
             "learned": learned or [],
             "episode_id": ep["id"] if ep else None,
             "cortex_used": cortex_used,
+            "active_topic": self.active_topic,
             "stats": {
                 "frames": len(self.hypergraph.frames),
                 "senses": len(self.hypergraph.senses),
@@ -278,7 +189,6 @@ class Brain:
     def run_sleep_consolidation(self, force: bool = True) -> Dict[str, Any]:
         """Trigger Offline Sleep Consolidation Engine."""
         report = self.episodic.consolidate(force=force)
-        # Re-normalize outgoing weights across all active agents during sleep
         for agent in list(self.hypergraph._by_agent.keys()):
             self.hypergraph.normalize_outgoing_weights(agent)
         self.updated_at = time.time()
@@ -374,10 +284,10 @@ class Brain:
         return None
 
     def _handle_forget(self, text: str) -> Optional[Dict[str, Any]]:
-        m = re.match(r"^(?:forget|delete|erase)\s+(?:about\s+)?(.+?)[.!?]*$", text.strip(), re.IGNORECASE)
+        m = re.match(r"^(?:forget|delete|erase|bhool\s+jao)\s+(?:about\s+)?(.+?)[.!?]*$", text.strip(), re.IGNORECASE)
         if not m:
             return None
-        target = _clean_phrase(m.group(1))
+        target = clean_phrase(m.group(1))
         removed = self.hypergraph.remove_entity(target)
         if removed > 0:
             return self._reply(
@@ -400,8 +310,7 @@ class Brain:
         stripped = text.strip()
         low = stripped.lower().rstrip("?!. ")
 
-        # Profile queries
-        if low in {"what is my name", "whats my name", "what's my name", "who am i", "do you know my name"}:
+        if low in {"what is my name", "whats my name", "what's my name", "who am i", "do you know my name", "mera naam kya hai"}:
             name = self.profile.get("name")
             if name:
                 return self._reply(
@@ -420,7 +329,7 @@ class Brain:
                 confidence=0.0,
             )
 
-        if low in {"what is my age", "how old am i", "whats my age", "what's my age"}:
+        if low in {"what is my age", "how old am i", "whats my age", "what's my age", "meri umar kya hai"}:
             age = self.profile.get("age")
             if age:
                 return self._reply(
@@ -439,7 +348,7 @@ class Brain:
                 confidence=0.0,
             )
 
-        if low in {"where do i live", "what is my city", "where am i from"}:
+        if low in {"where do i live", "what is my city", "where am i from", "main kahan rehta hun"}:
             loc = self.profile.get("location")
             if loc:
                 return self._reply(
@@ -458,8 +367,7 @@ class Brain:
                 confidence=0.0,
             )
 
-        # Profile teaching
-        m_name = re.match(r"^(?:my name is|call me|i am called)\s+([a-zA-Z][a-zA-Z0-9 .'-]{1,40})[.!]*$", stripped, re.IGNORECASE)
+        m_name = re.match(r"^(?:my name is|call me|i am called|mera naam)\s+([a-zA-Z][a-zA-Z0-9 .'-]{1,40}?)(?:\s+hai)?[.!]*$", stripped, re.IGNORECASE)
         if m_name:
             name = m_name.group(1).strip()
             self.profile["name"] = name
@@ -509,484 +417,72 @@ class Brain:
 
         return None
 
-    def _try_extract_local_facts(
-        self,
-        sentence: str,
-        last_subject: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """Extract role-bound frames from declarative English sentences with strict noise guards."""
-        s = _strip_leadins(sentence)
-        s = _REMEMBER_RE.sub("", s).strip().rstrip(".!")
-        if not s or s.endswith("?"):
-            return []
+    def _handle_self_query(self, text: str, lang: str = "english") -> Optional[Dict[str, Any]]:
+        low = text.lower().strip().rstrip("?!. ")
+        if not any(trig in low for trig in _SELF_TRIGGERS):
+            return None
 
-        first_word = s.split()[0].lower()
-        if first_word in _QUESTION_STARTERS:
-            return []
-
-        extracted: List[Dict[str, Any]] = []
-
-        # 0a. Branches / types / kinds pattern:
-        # e.g. "There are many branches of science, most popular are biology chemistry physics and mathematics"
-        m_br = re.search(
-            r"(?:branches|types|kinds|fields|categories)\s+of\s+([a-zA-Z][a-zA-Z0-9 '-]{1,35}?)(?:[,;:\s]+(?:most\s+popular|main|major|key|common|such\s+as|include|including)?\s*(?:are|include|includes|:))\s+(.+)$",
-            s,
-            re.IGNORECASE,
-        )
-        if m_br:
-            ag = _clean_phrase(m_br.group(1))
-            pat = _clean_phrase(m_br.group(2))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({
-                    "relation": "HAS_BRANCHES",
-                    "agent": ag,
-                    "action": "has_branches",
-                    "patient": pat,
-                    "polarity": 1,
-                })
-                return extracted
-
-        # 0b. Multi-sentence pronoun coreference: "In cosmology, it is estimated..." -> resolve "it" to last_subject
-        if last_subject and _is_valid_agent(last_subject):
-            m_ctx_it = re.match(r"^(?:in\s+[a-zA-Z '-]+,\s*)?it\s+(is|are|can|cannot|can't|has|have)\s+(.+)$", s, re.IGNORECASE)
-            if m_ctx_it:
-                s = f"{last_subject} {m_ctx_it.group(1)} {m_ctx_it.group(2)}"
-
-        # 1. Negative capability: X cannot / can't Y
-        m = re.match(r"^(.+?)\s+(?:cannot|can't|can not)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({"relation": "CAN", "agent": ag, "action": "can", "patient": pat, "polarity": -1})
-            return extracted
-
-        # 2. Positive capability: X can Y
-        m = re.match(r"^(.+?)\s+can\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({"relation": "CAN", "agent": ag, "action": "can", "patient": pat, "polarity": 1})
-            return extracted
-
-        # 3. Age attribute: X is 18 years old
-        m = re.match(r"^(.+?)\s+is\s+(\d{1,3})\s+years?\s+old$", s, re.IGNORECASE)
-        if m:
-            ag = _clean_phrase(m.group(1))
-            if _is_valid_agent(ag):
-                extracted.append({"relation": "HAS_AGE", "agent": ag, "action": "has_age", "patient": m.group(2), "polarity": 1})
-            return extracted
-
-        # 4. Negative taxonomy: X is not a Y
-        m = re.match(r"^(.+?)\s+(?:is|are)\s+not\s+(?:a|an)?\s*(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({"relation": "IS_A", "agent": ag, "action": "is", "patient": pat, "polarity": -1})
-            return extracted
-
-        # 5. Taxonomy / definition: X is a Y / X is Y
-        m = re.match(r"^(.+?)\s+(?:is|are)\s+(a|an)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(3))
-            if _is_valid_agent(ag) and pat:
-                rel = "IS_A" if len(pat.split()) <= 4 else "DEFINED_AS"
-                extracted.append({"relation": rel, "agent": ag, "action": "is", "patient": pat, "polarity": 1})
-            return extracted
-
-        m = re.match(r"^(.+?)\s+(?:is|are|means)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({"relation": "DEFINED_AS", "agent": ag, "action": "is", "patient": pat, "polarity": 1})
-            return extracted
-
-        # 6. Possession: X has / have Y
-        m = re.match(r"^(.+?)\s+(?:has|have)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({"relation": "HAS", "agent": ag, "action": "has", "patient": pat, "polarity": 1})
-            return extracted
-
-        # 7. Location: X lives in / is located in Y
-        m = re.match(r"^(.+?)\s+(?:lives?\s+in|located\s+in|stays?\s+in)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(2))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({"relation": "LOCATED_IN", "agent": ag, "action": "lives_in", "patient": pat, "polarity": 1})
-            return extracted
-
-        # 8. Creation: X created / built / made / founded Y
-        m = re.match(r"^(.+?)\s+(created|built|made|founded|developed)\s+(.+)$", s, re.IGNORECASE)
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(3))
-            if _is_valid_agent(ag) and pat:
-                extracted.append({
-                    "relation": "CREATED",
-                    "agent": ag,
-                    "action": _canon_verb(m.group(2)),
-                    "patient": pat,
-                    "polarity": 1,
-                })
-            return extracted
-
-        # 9. Role-bound SVO event
-        m = re.match(
-            r"^([a-zA-Z][a-zA-Z0-9 '-]{1,35}?)\s+(bit|bite|bites|ate|eats|chased|chases|killed|kills|helped|helps|loved|loves|hated|hates|liked|likes|hit|hits|saw|sees|taught|teaches|broke|fixed|wrote)\s+([a-zA-Z][a-zA-Z0-9 '-]{1,40})$",
-            s,
-            re.IGNORECASE,
-        )
-        if m:
-            ag, pat = _clean_phrase(m.group(1)), _clean_phrase(m.group(3))
-            verb_raw = m.group(2).lower()
-            if _is_valid_agent(ag) and pat:
-                extracted.append({
-                    "relation": "ACTION",
-                    "agent": ag,
-                    "action": _canon_verb(verb_raw),
-                    "patient": pat,
-                    "polarity": 1,
-                    "modifier": verb_raw,
-                })
-            return extracted
-
-        return extracted
-
-    def _answer_query(self, text: str) -> Optional[Dict[str, Any]]:
-        """Proof-tracked symbolic question answering across roles, capabilities, and definitions."""
-        q = _strip_leadins(text).rstrip("?!. ")
-        low = q.lower()
-
-        # 1. Self & NeuraSaMu identity queries
-        if any(trig in low for trig in _SELF_TRIGGERS):
-            if "neurasamu" in low:
-                frames = self.hypergraph.get_frames_for_agent("neurasamu")
-                fids = [f["id"] for f in frames[:3]]
-                return self._reply(
-                    text,
-                    "NeuraSaMu is an independent AI research and software development lab founded by Muhammad Salman Shar (neurasamu.com), focused on neuro-symbolic intelligence like NSM VB.",
-                    intent="self_query",
-                    mode="stored",
-                    confidence=0.99,
-                    recalled_ids=fids,
-                    proof_steps=["Core identity recall: NeuraSaMu -> independent AI lab founded by Muhammad Salman Shar."],
-                )
-            if any(w in low for w in ("made", "created", "built", "creator", "founder")):
-                frames = self.hypergraph.get_frames_for_agent("muhammad salman shar")
-                fids = [f["id"] for f in frames[:3]]
-                return self._reply(
-                    text,
-                    "I was created by Muhammad Salman Shar (Salman / Akira), the founder of NeuraSaMu.",
-                    intent="self_query",
-                    mode="stored",
-                    confidence=0.99,
-                    recalled_ids=fids,
-                    proof_steps=["Core identity recall: Muhammad Salman Shar CREATED NSM VB."],
-                )
-            frames = self.hypergraph.get_frames_for_agent("nsm vb")
+        if "neurasamu" in low:
+            frames = self.hypergraph.get_frames_for_agent("neurasamu")
             fids = [f["id"] for f in frames[:3]]
+            self.active_topic = "neurasamu"
+            msg = (
+                "NeuraSaMu ek independent AI research aur software development lab hai jise Muhammad Salman Shar ne banaya hai (neurasamu.com), aur NSM VB isi lab ka neuro-symbolic engine hai."
+                if lang == "hinglish"
+                else "NeuraSaMu is an independent AI research and software development lab founded by Muhammad Salman Shar (neurasamu.com), focused on neuro-symbolic intelligence like NSM VB."
+            )
             return self._reply(
-                text,
-                "I am NSM VB v1.4, a neuro-symbolic virtual brain built by Muhammad Salman Shar at NeuraSaMu. I learn role-bound facts, track my own reasoning traces, evolve through surgical feedback, and consolidate memory offline.",
-                intent="self_query",
-                mode="stored",
-                confidence=0.99,
+                text, msg, intent="self_query", mode="stored", confidence=0.99,
                 recalled_ids=fids,
-                proof_steps=["Core identity recall: NSM VB v1.4 cognitive architecture."],
+                proof_steps=["Core identity recall: NeuraSaMu -> independent AI lab founded by Muhammad Salman Shar."],
             )
 
-        # 2. Capability query: "Can X Y?" (Defeasible inheritance + strict boundary enforcement)
-        m = re.match(r"^can\s+(.+?)\s+([a-zA-Z][a-zA-Z0-9 '-]*)$", q, re.IGNORECASE)
-        if m:
-            subj = _clean_phrase(m.group(1))
-            ability = _clean_phrase(m.group(2))
-            disp_subj = _display_entity(subj)
-            res = self.hypergraph.query_capability_or_relation(subj, "CAN", ability)
-            if res["mode"] == "contradicted":
-                return self._reply(
-                    text,
-                    f"My memory holds conflicting evidence on whether {disp_subj} can {ability}. Tell me which one is correct to resolve it.",
-                    intent="query_can",
-                    mode="contradicted",
-                    confidence=res["confidence"],
-                    recalled_ids=res["used_frame_ids"],
-                    proof_steps=res["proof_steps"],
-                )
-            if res["mode"] in {"stored", "derived"}:
-                pol = res["polarity"]
-                basis = "directly stored" if res["mode"] == "stored" else "derived via inheritance"
-                pct = round(res["confidence"] * 100)
-                if pol > 0:
-                    ans = f"Yes, {disp_subj} can {ability} ({basis}, confidence {pct}%)."
-                else:
-                    ans = f"No, {disp_subj} cannot {ability} ({basis}, confidence {pct}%)."
-                return self._reply(
-                    text,
-                    ans,
-                    intent="query_can",
-                    mode=res["mode"],
-                    confidence=res["confidence"],
-                    recalled_ids=res["used_frame_ids"],
-                    proof_steps=res["proof_steps"],
-                )
-            # Strict boundary: never hijack an unknown capability query with another entity's vector hit
-            proofs = [f"Boundary check: no stored or inherited CAN frame links '{normalize_entity(subj)}' to '{normalize_entity(ability)}'."]
-            note = ""
-            alt_hits = self.hypergraph.semantic_search(ability, top_k=3, min_score=0.35)
-            for alt_fr, alt_sc in alt_hits:
-                if alt_fr.get("relation") == "CAN" and alt_fr.get("polarity", 1) > 0 and alt_fr.get("agent") != normalize_entity(subj):
-                    note = f" However, my memory shows that {self._frame_to_sentence(alt_fr)}"
-                    proofs.append(f"Contrast note ({alt_sc:.2f}): {alt_fr['agent']} CAN {alt_fr['patient']}")
-                    break
+        if any(w in low for w in ("made", "created", "built", "creator", "founder", "kisne", "banaya")):
+            frames = self.hypergraph.get_frames_for_agent("muhammad salman shar")
+            fids = [f["id"] for f in frames[:3]]
+            self.active_topic = "muhammad salman shar"
+            msg = (
+                "Mujhe Muhammad Salman Shar (Salman / Akira) ne banaya hai, jo NeuraSaMu ke founder hain."
+                if lang == "hinglish"
+                else "I was created by Muhammad Salman Shar (Salman / Akira), the founder of NeuraSaMu."
+            )
             return self._reply(
-                text,
-                f"I have no stored evidence that {disp_subj} can {ability}.{note}",
-                intent="query_can",
-                mode="unknown",
-                confidence=0.0,
-                recalled_ids=[],
-                proof_steps=proofs,
+                text, msg, intent="self_query", mode="stored", confidence=0.99,
+                recalled_ids=fids,
+                proof_steps=["Core identity recall: Muhammad Salman Shar CREATED NSM VB."],
             )
 
-        # 3. Role-bound SVO Agent query: "Who bit man?" / "What chased cat?"
-        m = re.match(r"^(?:who|what)\s+([a-zA-Z]+)\s+(.+)$", q, re.IGNORECASE)
-        if m and m.group(1).lower() not in {"is", "are", "was", "were", "did", "does", "do", "has", "have", "can"}:
-            verb = _canon_verb(m.group(1))
-            patient = _clean_phrase(m.group(2))
-            pat_frames = self.hypergraph.get_frames_for_patient(patient)
-            matches = [
-                f for f in pat_frames
-                if _canon_verb(f.get("action", "")) == verb or (verb == "create" and f.get("relation") == "CREATED")
-            ]
-            if matches:
-                top = matches[0]
-                verb_surface = top.get("modifier") or top.get("action") or m.group(1)
-                conf = self.hypergraph.bayesian_confidence(top)
-                return self._reply(
-                    text,
-                    f"{top['agent'].title()} {verb_surface} {top['patient']}.",
-                    intent="query_role_agent",
-                    mode="stored",
-                    confidence=conf,
-                    recalled_ids=[top["id"]],
-                    proof_steps=[f"Role-bound match: Agent={top['agent']}, Action={top['action']}, Patient={top['patient']}"],
-                )
-
-        # 4. Role-bound SVO Patient query: "Who/What did X <verb>?"
-        m = re.match(r"^(?:who|what)\s+(?:did|does)\s+(.+?)\s+([a-zA-Z]+)$", q, re.IGNORECASE)
-        if m:
-            agent = _clean_phrase(m.group(1))
-            verb = _canon_verb(m.group(2))
-            ag_frames = self.hypergraph.get_frames_for_agent(agent)
-            matches = [
-                f for f in ag_frames
-                if _canon_verb(f.get("action", "")) == verb or (verb == "create" and f.get("relation") == "CREATED")
-            ]
-            if matches:
-                top = matches[0]
-                verb_surface = top.get("modifier") or top.get("action") or m.group(2)
-                conf = self.hypergraph.bayesian_confidence(top)
-                return self._reply(
-                    text,
-                    f"{top['agent'].title()} {verb_surface} {top['patient']}.",
-                    intent="query_role_patient",
-                    mode="stored",
-                    confidence=conf,
-                    recalled_ids=[top["id"]],
-                    proof_steps=[f"Role-bound match: Agent={top['agent']}, Action={top['action']}, Patient={top['patient']}"],
-                )
-
-        # 5. Age query: "How old is X?"
-        m = re.match(r"^how\s+old\s+is\s+(.+)$", q, re.IGNORECASE)
-        if m:
-            subj = _clean_phrase(m.group(1))
-            res = self.hypergraph.query_capability_or_relation(subj, "HAS_AGE")
-            if res["mode"] in {"stored", "derived"} and res["frames"]:
-                val = res["frames"][0]["patient"]
-                return self._reply(
-                    text,
-                    f"{subj.title()} is {val} years old.",
-                    intent="query_age",
-                    mode=res["mode"],
-                    confidence=res["confidence"],
-                    recalled_ids=res["used_frame_ids"],
-                    proof_steps=res["proof_steps"],
-                )
-
-        # 6. Location query: "Where does X live?"
-        m = re.match(r"^where\s+(?:does|is)\s+(.+?)(?:\s+live|\s+located)?$", q, re.IGNORECASE)
-        if m:
-            subj = _clean_phrase(m.group(1))
-            res = self.hypergraph.query_capability_or_relation(subj, "LOCATED_IN")
-            if res["mode"] in {"stored", "derived"} and res["frames"]:
-                val = res["frames"][0]["patient"]
-                return self._reply(
-                    text,
-                    f"{subj.title()} lives in {val}.",
-                    intent="query_location",
-                    mode=res["mode"],
-                    confidence=res["confidence"],
-                    recalled_ids=res["used_frame_ids"],
-                    proof_steps=res["proof_steps"],
-                )
-
-        # 7a. Attribute-of-entity query (e.g. "What are branches of science?" / "How many branches of science?")
-        m_attr = re.match(
-            r"^(?:what\s+(?:are|is)|how\s+many|list|name)\s+(?:the\s+)?(branches|types|kinds|parts|fields|categories)\s+of\s+(.+)$",
-            q,
-            re.IGNORECASE,
+        frames = self.hypergraph.get_frames_for_agent("nsm vb")
+        fids = [f["id"] for f in frames[:3]]
+        self.active_topic = "nsm vb"
+        msg = (
+            "Main NSM VB v1.5 hoon — NeuraSaMu (Muhammad Salman Shar) ka neuro-symbolic virtual brain. Main English aur Hinglish mein facts seekhta hoon, proof trace ke saath reasoning karta hoon, aur offline evolve hota hoon."
+            if lang == "hinglish"
+            else "I am NSM VB v1.5, a neuro-symbolic virtual brain built by Muhammad Salman Shar at NeuraSaMu. I learn role-bound facts in English and Hinglish, reason across 16 question types with proof traces, and consolidate memory offline."
         )
-        if m_attr:
-            attr_word = m_attr.group(1).lower()
-            ent = _clean_phrase(m_attr.group(2))
-            br_frames = self.hypergraph.get_frames_for_agent(ent, relation="HAS_BRANCHES")
-            if br_frames:
-                return self._summarize_entity_frames(text, ent, br_frames)
-            # Also check any frame mentioning branches/types of that entity
-            all_ent = self.hypergraph.get_frames_for_agent(ent)
-            matching_attr = [
-                f for f in all_ent
-                if attr_word in f.get("patient", "").lower() or attr_word in f.get("raw_text", "").lower()
-            ]
-            if matching_attr:
-                return self._summarize_entity_frames(text, ent, matching_attr)
-            # Check frames where patient mentions "branch of <ent>" (e.g. Physics is branch of science)
-            sub_matches = [
-                f for f in self.hypergraph.frames.values()
-                if f"branch of {normalize_entity(ent)}" in f.get("patient", "").lower()
-                or f"branches of {normalize_entity(ent)}" in f.get("raw_text", "").lower()
-            ]
-            if sub_matches:
-                return self._summarize_entity_frames(text, ent, sub_matches[:6])
+        return self._reply(
+            text, msg, intent="self_query", mode="stored", confidence=0.99,
+            recalled_ids=fids,
+            proof_steps=["Core identity recall: NSM VB v1.5 cognitive architecture."],
+        )
 
-        # 7b. Definition / Topic query: "What is X?" / "Who is X?" / compound questions
-        m = re.match(r"^(?:what|who)\s+(?:is|are)\s+(.+)$", q, re.IGNORECASE)
-        if not m:
-            m = re.match(r"^(?:tell me about|explain|define|describe)\s+(.+)$", q, re.IGNORECASE)
-        if m:
-            raw_topic = m.group(1)
-            primary_part = re.split(r"\s+(?:and|or)\s+(?:what|who|how|why|where)\b", raw_topic, maxsplit=1, flags=re.IGNORECASE)[0]
-            topic = _clean_phrase(primary_part)
-            frames = self.hypergraph.get_frames_for_agent(topic)
-            if frames:
-                return self._summarize_entity_frames(text, topic, frames)
-            rev_frames = self.hypergraph.get_frames_for_patient(topic)
-            if rev_frames:
-                return self._summarize_entity_frames(text, topic, rev_frames)
-            # Whole-word match where topic is part of a known compound entity (e.g. "brain" -> "human brain")
-            t_low = normalize_entity(topic)
-            if t_low and len(t_low) >= 3:
-                partial_matches = [
-                    ent for ent in self.hypergraph._by_agent.keys()
-                    if re.search(r"\b" + re.escape(t_low) + r"\b", ent)
-                ]
-                if partial_matches:
-                    partial_matches.sort(key=len)
-                    collected = []
-                    for ent in partial_matches[:2]:
-                        collected.extend(self.hypergraph.get_frames_for_agent(ent)[:2])
-                    if collected:
-                        return self._summarize_entity_frames(text, partial_matches[0], collected)
-            # Longest known entity match inside compound questions (skip if query asked for specific unknown attribute like "branches of X")
-            if not re.search(r"\b(?:branches|types|kinds|parts|causes|effects)\s+of\b", low):
-                known_agents = sorted(self.hypergraph._by_agent.keys(), key=len, reverse=True)
-                for ent in known_agents:
-                    if len(ent) >= 2 and re.search(r"\b" + re.escape(ent) + r"\b", low):
-                        ent_frames = self.hypergraph.get_frames_for_agent(ent)
-                        if ent_frames:
-                            return self._summarize_entity_frames(text, ent, ent_frames)
-
-        # 8. Bare topic query (1-3 words matching a known entity)
-        if len(q.split()) <= 3:
-            topic = _clean_phrase(q)
-            frames = self.hypergraph.get_frames_for_agent(topic)
-            if frames:
-                return self._summarize_entity_frames(text, topic, frames)
-
-        # 9. Semantic vector recall with lexical overlap guard (prevents noise on truly unknown topics)
-        from src.hypergraph import tokenize_content
-        q_tokens = set(tokenize_content(q))
-        sem_hits = self.hypergraph.semantic_search(q, top_k=5, min_score=0.32)
-        filtered_hits = []
-        for fr, sc in sem_hits:
-            if not _is_valid_agent(fr.get("agent", "")):
-                continue
-            f_blob = f"{fr.get('agent', '')} {fr.get('patient', '')} {fr.get('raw_text', '')}"
-            f_tokens = set(tokenize_content(f_blob))
-            overlap = q_tokens.intersection(f_tokens)
-            # Require at least one content-word overlap OR very high semantic vector match
-            if overlap or sc >= 0.48:
-                filtered_hits.append((fr, sc))
-
-        if filtered_hits:
-            top_frames = [fr for fr, _ in filtered_hits[:3]]
-            top_score = filtered_hits[0][1]
-            snippets = [self._frame_to_sentence(fr) for fr in top_frames]
-            fids = [fr["id"] for fr in top_frames]
-            proofs = [
-                f"Vector recall ({sc:.2f}): {fr['agent']} {fr['relation']} {fr['patient']}"
-                for fr, sc in filtered_hits[:3]
-            ]
-            return self._reply(
-                text,
-                " ".join(snippets),
-                intent="semantic_recall",
-                mode="stored",
-                confidence=min(0.95, max(0.45, top_score)),
-                recalled_ids=fids,
-                proof_steps=proofs,
-            )
-
-        # Check episodic recall if user is asking something similar to a past conversation
-        ep_hits = self.episodic.recall_similar(q, top_k=2, min_score=0.42)
-        if ep_hits:
-            best_ep, ep_score = ep_hits[0]
-            if best_ep.get("response") and best_ep.get("mode") != "unknown":
-                ep_tokens = set(tokenize_content(best_ep.get("user_input", "")))
-                if q_tokens.intersection(ep_tokens):
-                    return self._reply(
-                        text,
-                        f"From a similar earlier episode: {best_ep['response']}",
-                        intent="episodic_recall",
-                        mode="derived",
-                        confidence=round(ep_score * 0.85, 3),
-                        recalled_ids=best_ep.get("recalled_frame_ids", []),
-                        proof_steps=[f"Matched prior episode {best_ep['id']} (sim={ep_score:.2f})."],
-                    )
-
-        return None
-
-    @staticmethod
-    def _frame_to_sentence(fr: Dict[str, Any]) -> str:
-        ag = _display_entity(fr.get("agent", ""))
-        pat = fr.get("patient", "")
-        rel = fr.get("relation", "")
-        pol = fr.get("polarity", 1)
-        if rel == "IS_A":
-            return f"{ag} is {'not ' if pol < 0 else ''}a {pat}."
-        if rel == "DEFINED_AS":
-            return f"{ag} is {'not ' if pol < 0 else ''}{pat}."
-        if rel == "CAN":
-            return f"{ag} {'can' if pol > 0 else 'cannot'} {pat}."
-        if rel == "HAS":
-            return f"{ag} has {pat}."
-        if rel == "HAS_BRANCHES":
-            return f"Major branches of {ag} include {pat}."
-        if rel == "HAS_AGE":
-            return f"{ag} is {pat} years old."
-        if rel == "LOCATED_IN":
-            return f"{ag} lives in {pat}."
-        if rel == "CREATED":
-            act = fr.get("action") or "created"
-            return f"{ag} {act} {pat}."
-        if rel == "ACTION":
-            act = fr.get("modifier") or fr.get("action") or "acted on"
-            return f"{ag} {act} {pat}."
-        return f"{ag} {rel.lower().replace('_', ' ')} {pat}."
-
-    def _summarize_entity_frames(self, query: str, topic: str, frames: List[Dict[str, Any]]) -> Dict[str, Any]:
-        selected = frames[:4]
-        sentences = [self._frame_to_sentence(fr) for fr in selected]
+    def _summarize_entity_frames(
+        self,
+        query: str,
+        topic: str,
+        frames: List[Dict[str, Any]],
+        lang: str = "english",
+        intent: str = "topic_query",
+    ) -> Dict[str, Any]:
+        # Prioritize definitions and core taxonomic frames first
+        prio = {"DEFINED_AS": 0, "IS_A": 1, "USED_FOR": 2, "WORKS_BY": 3, "ALSO_KNOWN_AS": 4}
+        ordered = sorted(
+            frames,
+            key=lambda f: (prio.get(f.get("relation", ""), 9), -self.hypergraph.bayesian_confidence(f)),
+        )
+        selected = ordered[:4]
+        self.active_topic = topic
+        response_txt = realizer.realize_frames(selected, lang=lang, max_items=4)
         fids = [fr["id"] for fr in selected]
         avg_conf = sum(self.hypergraph.bayesian_confidence(fr) for fr in selected) / len(selected)
         proofs = [
@@ -995,13 +491,505 @@ class Brain:
         ]
         return self._reply(
             query,
-            " ".join(sentences),
-            intent="topic_query",
+            response_txt,
+            intent=intent,
             mode="stored",
             confidence=avg_conf,
             recalled_ids=fids,
             proof_steps=proofs,
         )
+
+    def _dispatch_question(self, pq: ParsedQuestion, full_text: str) -> Optional[Dict[str, Any]]:
+        """Route any of the 16 structured ParsedQuestion types through typed hypergraph reasoning."""
+        lang = pq.language
+        qtype = pq.qtype
+
+        # 0. Self / NeuraSaMu identity shortcut
+        self_res = self._handle_self_query(pq.raw_text, lang=lang)
+        if self_res:
+            return self_res
+
+        # 16. FOLLOW-UP / ELABORATION
+        if qtype == "QUERY_FOLLOWUP":
+            topic = self.hypergraph.resolve_alias(pq.subject or self.active_topic or "")
+            if not topic:
+                msg = (
+                    "Abhi koi active topic nahi hai — pehle kisi topic ke baare mein pucho ya sikhao!"
+                    if lang == "hinglish"
+                    else "There is no active topic yet — ask or teach me about something first!"
+                )
+                return self._reply(full_text, msg, intent="query_followup", mode="unknown", confidence=0.0)
+            all_frames = self.hypergraph.get_frames_for_agent(topic)
+            last_ep = self.episodic.get_last_episode(skip_meta=True)
+            already_shown = set(last_ep.get("recalled_frame_ids", [])) if last_ep else set()
+            unseen = [f for f in all_frames if f["id"] not in already_shown]
+            if unseen:
+                return self._summarize_entity_frames(full_text, topic, unseen, lang=lang, intent="query_followup")
+            if all_frames:
+                disp = realizer.display_entity(topic)
+                msg = (
+                    f"{disp} ke baare mein abhi mere paas itna hi stored hai. Kuch naya sikha do toh main add kar lunga!"
+                    if lang == "hinglish"
+                    else f"That is everything I currently have stored about {disp}. Teach me another detail and I will link it in."
+                )
+                return self._reply(
+                    full_text, msg, intent="query_followup", mode="stored", confidence=0.85,
+                    recalled_ids=[f["id"] for f in all_frames[:2]],
+                    proof_steps=[f"Follow-up checked all {len(all_frames)} frames on active topic '{topic}'."],
+                )
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, topic, lang=lang),
+                intent="query_followup", mode="unknown", confidence=0.0,
+            )
+
+        # 12. COMPARISON / CONTRAST
+        if qtype == "QUERY_COMPARE":
+            comp = self.hypergraph.compare_entities(pq.subject, pq.secondary_subject)
+            if comp["entity_a"]:
+                self.active_topic = comp["entity_a"]
+            return self._reply(
+                full_text,
+                realizer.realize_comparison(comp, lang=lang),
+                intent="query_compare",
+                mode=comp["mode"],
+                confidence=comp["confidence"],
+                recalled_ids=comp["used_frame_ids"],
+                proof_steps=comp["proof_steps"],
+            )
+
+        # 6. CHOICE / ALTERNATIVE
+        if qtype == "QUERY_CHOICE" and len(pq.options) >= 2:
+            opt_a, opt_b = pq.options[0], pq.options[1]
+            if pq.subject:
+                subj = self.hypergraph.resolve_alias(pq.subject)
+                self.active_topic = subj
+                res_a = self.hypergraph.query_verify(subj, "IS_A", opt_a)
+                res_b = self.hypergraph.query_verify(subj, "IS_A", opt_b)
+                used = list(dict.fromkeys(res_a.get("used_frame_ids", []) + res_b.get("used_frame_ids", [])))
+                proofs = res_a.get("proof_steps", []) + res_b.get("proof_steps", [])
+                best_conf = max(res_a.get("confidence", 0.0), res_b.get("confidence", 0.0))
+                mode = "stored" if (res_a["mode"] in {"stored", "derived"} or res_b["mode"] in {"stored", "derived"}) else "unknown"
+                ans = realizer.realize_choice(subj, opt_a, opt_b, res_a, res_b, lang=lang)
+                return self._reply(
+                    full_text, ans, intent="query_choice", mode=mode,
+                    confidence=best_conf, recalled_ids=used, proof_steps=proofs,
+                )
+            # Comparative choice: "Which is faster, SSD or HDD?"
+            comp = self.hypergraph.compare_entities(opt_a, opt_b)
+            ans = realizer.realize_comparison(comp, lang=lang)
+            return self._reply(
+                full_text, ans, intent="query_choice", mode=comp["mode"],
+                confidence=comp["confidence"], recalled_ids=comp["used_frame_ids"],
+                proof_steps=comp["proof_steps"],
+            )
+
+        # 8. CONSEQUENCE / HYPOTHETICAL
+        if qtype == "QUERY_IF_THEN":
+            res = self.hypergraph.query_consequence(pq.subject)
+            if res["mode"] != "unknown":
+                return self._reply(
+                    full_text,
+                    realizer.realize_frames(res["frames"], lang=lang, max_items=3),
+                    intent="query_if_then",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, pq.subject, lang=lang),
+                intent="query_if_then", mode="unknown", confidence=0.0,
+                proof_steps=res["proof_steps"],
+            )
+
+        # 7. CAUSAL (WHY / REASON)
+        if qtype == "QUERY_CAUSE":
+            res = self.hypergraph.query_causal(pq.subject)
+            if res["mode"] != "unknown":
+                self.active_topic = pq.subject
+                return self._reply(
+                    full_text,
+                    realizer.realize_frames(res["frames"], lang=lang, max_items=3),
+                    intent="query_cause",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, pq.subject, lang=lang),
+                intent="query_cause", mode="unknown", confidence=0.0,
+                proof_steps=res["proof_steps"],
+            )
+
+        # 10. PURPOSE / UTILITY
+        if qtype == "QUERY_PURPOSE":
+            subj = self.hypergraph.resolve_alias(pq.subject)
+            res = self.hypergraph.query_capability_or_relation(subj, "USED_FOR")
+            if res["mode"] == "unknown":
+                res = self.hypergraph.query_capability_or_relation(subj, "CAN")
+            if res["mode"] in {"stored", "derived"} and res["frames"]:
+                self.active_topic = subj
+                return self._reply(
+                    full_text,
+                    realizer.realize_frames(res["frames"], lang=lang, max_items=3),
+                    intent="query_purpose",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, subj, lang=lang),
+                intent="query_purpose", mode="unknown", confidence=0.0,
+                proof_steps=[f"No USED_FOR or CAN frame found for '{subj}'."],
+            )
+
+        # 9. PROCEDURAL (HOW IT WORKS)
+        if qtype == "QUERY_HOW":
+            subj = self.hypergraph.resolve_alias(pq.subject)
+            res = self.hypergraph.query_capability_or_relation(subj, "WORKS_BY")
+            if res["mode"] in {"stored", "derived"} and res["frames"]:
+                self.active_topic = subj
+                return self._reply(
+                    full_text,
+                    realizer.realize_frames(res["frames"], lang=lang, max_items=3),
+                    intent="query_how",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            # Fallback to definition if it describes mechanism
+            defs = self.hypergraph.get_frames_for_agent(subj, relation="DEFINED_AS")
+            if defs:
+                return self._summarize_entity_frames(full_text, subj, defs[:2], lang=lang, intent="query_how")
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, subj, lang=lang),
+                intent="query_how", mode="unknown", confidence=0.0,
+                proof_steps=[f"No WORKS_BY frame found for '{subj}'."],
+            )
+
+        # 11. COMPOSITION / PARTS / BRANCHES
+        if qtype == "QUERY_PARTS":
+            subj = self.hypergraph.resolve_alias(pq.subject)
+            attr_word = (pq.target or "parts").lower()
+            frames = (
+                self.hypergraph.get_frames_for_agent(subj, relation="HAS_BRANCHES")
+                if attr_word in {"branches", "types", "kinds", "fields", "categories"}
+                else []
+            )
+            frames = frames + self.hypergraph.get_frames_for_agent(subj, relation="HAS_PART")
+            if not frames:
+                frames = self.hypergraph.get_frames_for_agent(subj, relation="HAS_BRANCHES")
+            if not frames:
+                frames = [
+                    f for f in self.hypergraph.get_frames_for_agent(subj)
+                    if attr_word in f.get("patient", "").lower() or attr_word in f.get("raw_text", "").lower()
+                ]
+            if not frames:
+                frames = [
+                    f for f in self.hypergraph.frames.values()
+                    if f"branch of {subj}" in f.get("patient", "").lower()
+                    or f"branches of {subj}" in f.get("raw_text", "").lower()
+                ]
+            if frames:
+                return self._summarize_entity_frames(full_text, subj, frames[:6], lang=lang, intent="query_parts")
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, subj, lang=lang),
+                intent="query_parts", mode="unknown", confidence=0.0,
+                proof_steps=[f"No HAS_PART or HAS_BRANCHES frames found for '{subj}'."],
+            )
+
+        # 13. EXAMPLES / INSTANCES
+        if qtype == "QUERY_EXAMPLES":
+            res = self.hypergraph.query_examples(pq.subject)
+            if res["mode"] != "unknown":
+                self.active_topic = self.hypergraph.resolve_alias(pq.subject)
+            return self._reply(
+                full_text,
+                realizer.realize_examples(pq.subject, res, lang=lang),
+                intent="query_examples",
+                mode=res["mode"],
+                confidence=res["confidence"],
+                recalled_ids=res["used_frame_ids"],
+                proof_steps=res["proof_steps"],
+            )
+
+        # 3. ALIAS / SYNONYM
+        if qtype == "QUERY_ALIAS":
+            subj = normalize_entity(pq.subject)
+            aka_frames = self.hypergraph.get_frames_for_agent(subj, relation="ALSO_KNOWN_AS")
+            if not aka_frames:
+                aka_frames = self.hypergraph.get_frames_for_patient(subj, relation="ALSO_KNOWN_AS")
+            if aka_frames:
+                return self._summarize_entity_frames(full_text, subj, aka_frames, lang=lang, intent="query_alias")
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, subj, lang=lang),
+                intent="query_alias", mode="unknown", confidence=0.0,
+                proof_steps=[f"No ALSO_KNOWN_AS alias stored for '{subj}'."],
+            )
+
+        # 5. CAPABILITY (CAN / CANNOT) — Strict boundary enforcement
+        if qtype == "QUERY_CAN":
+            subj = self.hypergraph.resolve_alias(pq.subject)
+            ability = pq.target
+            disp_subj = realizer.display_entity(subj)
+            res = self.hypergraph.query_capability_or_relation(subj, "CAN", ability)
+            if res["mode"] == "contradicted":
+                msg = (
+                    f"Meri memory mein {disp_subj} ke '{ability}' kar sakne pe do ulte facts hain. Sahi baat batao taaki fix kar doon."
+                    if lang == "hinglish"
+                    else f"My memory holds conflicting evidence on whether {disp_subj} can {ability}. Tell me which one is correct to resolve it."
+                )
+                return self._reply(
+                    full_text, msg, intent="query_can", mode="contradicted",
+                    confidence=res["confidence"], recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            if res["mode"] in {"stored", "derived"}:
+                self.active_topic = subj
+                pol = res["polarity"]
+                pct = round(res["confidence"] * 100)
+                if lang == "hinglish":
+                    basis = "seedha stored hai" if res["mode"] == "stored" else "inheritance se derive hua"
+                    ans = (
+                        f"Haan, {disp_subj} {ability} kar sakta hai ({basis}, confidence {pct}%)."
+                        if pol > 0
+                        else f"Nahi, {disp_subj} {ability} nahi kar sakta ({basis}, confidence {pct}%)."
+                    )
+                else:
+                    basis = "directly stored" if res["mode"] == "stored" else "derived via inheritance"
+                    ans = (
+                        f"Yes, {disp_subj} can {ability} ({basis}, confidence {pct}%)."
+                        if pol > 0
+                        else f"No, {disp_subj} cannot {ability} ({basis}, confidence {pct}%)."
+                    )
+                return self._reply(
+                    full_text, ans, intent="query_can", mode=res["mode"],
+                    confidence=res["confidence"], recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            # Strict unknown boundary + helpful contrast note
+            proofs = [f"Boundary check: no stored or inherited CAN frame links '{subj}' to '{ability}'."]
+            note = ""
+            alt_hits = self.hypergraph.semantic_search(ability, top_k=3, min_score=0.35)
+            for alt_fr, alt_sc in alt_hits:
+                if alt_fr.get("relation") == "CAN" and alt_fr.get("polarity", 1) > 0 and alt_fr.get("agent") != subj:
+                    sent = realizer.frame_to_sentence(alt_fr, lang=lang)
+                    note = f" Lekin meri memory ke hisaab se {sent}" if lang == "hinglish" else f" However, my memory shows that {sent}"
+                    proofs.append(f"Contrast note ({alt_sc:.2f}): {alt_fr['agent']} CAN {alt_fr['patient']}")
+                    break
+            msg = (
+                f"Mere paas koi stored evidence nahi hai ki {disp_subj} {ability} kar sakta hai.{note}"
+                if lang == "hinglish"
+                else f"I have no stored evidence that {disp_subj} can {ability}.{note}"
+            )
+            return self._reply(
+                full_text, msg, intent="query_can", mode="unknown",
+                confidence=0.0, recalled_ids=[], proof_steps=proofs,
+            )
+
+        # 4. POLAR VERIFICATION (YES / NO)
+        if qtype == "QUERY_VERIFY":
+            subj = self.hypergraph.resolve_alias(pq.subject)
+            res = self.hypergraph.query_verify(subj, pq.relation or "IS_A", pq.target)
+            if res["mode"] != "unknown":
+                self.active_topic = subj
+            ans = realizer.realize_verify(res, subj, pq.target, lang=lang)
+            return self._reply(
+                full_text, ans, intent="query_verify", mode=res["mode"],
+                confidence=res["confidence"], recalled_ids=res["used_frame_ids"],
+                proof_steps=res["proof_steps"],
+            )
+
+        # 14. ROLE / EVENT (WHO / WHAT DID)
+        if qtype == "QUERY_ROLE":
+            role_ask = pq.meta.get("role_ask", "agent")
+            verb = pq.action
+            if role_ask == "agent" and pq.target:
+                tgt = self.hypergraph.resolve_alias(pq.target)
+                pat_frames = self.hypergraph.get_frames_for_patient(tgt)
+                matches = [
+                    f for f in pat_frames
+                    if canon_verb(f.get("action", "")) == verb
+                    or (verb in _CREATOR_VERBS and f.get("relation") == "CREATED")
+                ]
+                if matches:
+                    top = matches[0]
+                    self.active_topic = top["agent"]
+                    conf = self.hypergraph.bayesian_confidence(top)
+                    ans = realizer.frame_to_sentence(top, lang=lang)
+                    return self._reply(
+                        full_text, ans, intent="query_role_agent", mode="stored",
+                        confidence=conf, recalled_ids=[top["id"]],
+                        proof_steps=[f"Role-bound match: Agent={top['agent']}, Action={top['action']}, Patient={top['patient']}"],
+                    )
+            elif role_ask == "patient" and pq.subject:
+                subj = self.hypergraph.resolve_alias(pq.subject)
+                ag_frames = self.hypergraph.get_frames_for_agent(subj)
+                matches = [
+                    f for f in ag_frames
+                    if canon_verb(f.get("action", "")) == verb
+                    or (verb in _CREATOR_VERBS and f.get("relation") == "CREATED")
+                ]
+                if matches:
+                    top = matches[0]
+                    self.active_topic = subj
+                    conf = self.hypergraph.bayesian_confidence(top)
+                    ans = realizer.frame_to_sentence(top, lang=lang)
+                    return self._reply(
+                        full_text, ans, intent="query_role_patient", mode="stored",
+                        confidence=conf, recalled_ids=[top["id"]],
+                        proof_steps=[f"Role-bound match: Agent={top['agent']}, Action={top['action']}, Patient={top['patient']}"],
+                    )
+            elif role_ask == "action" and pq.subject and pq.target:
+                subj = self.hypergraph.resolve_alias(pq.subject)
+                tgt = self.hypergraph.resolve_alias(pq.target)
+                matches = [f for f in self.hypergraph.get_frames_for_agent(subj) if f.get("patient") == tgt]
+                if matches:
+                    top = matches[0]
+                    conf = self.hypergraph.bayesian_confidence(top)
+                    return self._reply(
+                        full_text, realizer.frame_to_sentence(top, lang=lang),
+                        intent="query_role_action", mode="stored",
+                        confidence=conf, recalled_ids=[top["id"]],
+                        proof_steps=[f"Event match: {top['agent']} {top['action']} {top['patient']}"],
+                    )
+
+        # 15. QUANTITATIVE / SPATIAL / TEMPORAL
+        if qtype == "QUERY_FACT_META":
+            subtype = pq.meta.get("subtype", "count")
+            subj = self.hypergraph.resolve_alias(pq.subject)
+            rel_map = {"age": "HAS_AGE", "location": "LOCATED_IN", "count": "HAS_COUNT", "time": "CREATED_AT"}
+            rel = rel_map.get(subtype, "HAS_COUNT")
+            res = self.hypergraph.query_capability_or_relation(subj, rel)
+            if res["mode"] in {"stored", "derived"} and res["frames"]:
+                self.active_topic = subj
+                return self._reply(
+                    full_text,
+                    realizer.realize_frames(res["frames"], lang=lang, max_items=2),
+                    intent=f"query_{subtype}",
+                    mode=res["mode"],
+                    confidence=res["confidence"],
+                    recalled_ids=res["used_frame_ids"],
+                    proof_steps=res["proof_steps"],
+                )
+            # For count queries, also scan HAS/DEFINED_AS frames mentioning numbers + target word
+            if subtype == "count":
+                tgt_word = (pq.target or "").lower()
+                candidates = self.hypergraph.get_frames_for_agent(subj)
+                if not candidates and tgt_word:
+                    candidates = [
+                        f for f in self.hypergraph.frames.values()
+                        if tgt_word in f.get("patient", "").lower() and re.search(r"\d+", f.get("patient", ""))
+                    ]
+                num_matches = [
+                    f for f in candidates
+                    if re.search(r"\d+", f.get("patient", ""))
+                    and (not tgt_word or tgt_word in f.get("patient", "").lower())
+                ]
+                if num_matches:
+                    return self._summarize_entity_frames(full_text, num_matches[0]["agent"], num_matches[:2], lang=lang, intent="query_count")
+
+        # 2. CLASSIFICATION / TYPE
+        if qtype == "QUERY_CLASS":
+            subj = self.hypergraph.resolve_alias(pq.subject)
+            isa = self.hypergraph.get_frames_for_agent(subj, relation="IS_A")
+            if isa:
+                return self._summarize_entity_frames(full_text, subj, isa, lang=lang, intent="query_class")
+            all_f = self.hypergraph.get_frames_for_agent(subj)
+            if all_f:
+                return self._summarize_entity_frames(full_text, subj, all_f, lang=lang, intent="query_class")
+            return self._reply(
+                full_text, realizer.realize_unknown(qtype, subj, lang=lang),
+                intent="query_class", mode="unknown", confidence=0.0,
+            )
+
+        # 1. DEFINITION / MEANING
+        if qtype == "QUERY_DEFINE":
+            topic = self.hypergraph.resolve_alias(pq.subject)
+            frames = self.hypergraph.get_frames_for_agent(topic)
+            if frames:
+                return self._summarize_entity_frames(full_text, topic, frames, lang=lang)
+            rev_frames = self.hypergraph.get_frames_for_patient(topic)
+            if rev_frames:
+                return self._summarize_entity_frames(full_text, topic, rev_frames, lang=lang)
+            # Whole-word match inside compound entities (e.g. "brain" -> "human brain")
+            if topic and len(topic) >= 3:
+                partial_matches = [
+                    ent for ent in self.hypergraph._by_agent.keys()
+                    if re.search(r"\b" + re.escape(topic) + r"\b", ent)
+                ]
+                if partial_matches:
+                    partial_matches.sort(key=len)
+                    collected = []
+                    for ent in partial_matches[:2]:
+                        collected.extend(self.hypergraph.get_frames_for_agent(ent)[:2])
+                    if collected:
+                        return self._summarize_entity_frames(full_text, partial_matches[0], collected, lang=lang)
+
+        return None
+
+    def _semantic_and_episodic_fallback(self, query: str, lang: str = "english") -> Optional[Dict[str, Any]]:
+        """Vector recall with strict lexical-overlap guard + episodic recall."""
+        cleaned_q = self.parser.strip_wrappers(query).rstrip("?!. ")
+        # Bare topic lookup (1-3 words)
+        if cleaned_q and len(cleaned_q.split()) <= 3:
+            topic = self.hypergraph.resolve_alias(cleaned_q)
+            frames = self.hypergraph.get_frames_for_agent(topic)
+            if frames:
+                return self._summarize_entity_frames(query, topic, frames, lang=lang)
+
+        q_tokens = set(tokenize_content(cleaned_q))
+        sem_hits = self.hypergraph.semantic_search(cleaned_q, top_k=5, min_score=0.32)
+        filtered_hits = []
+        for fr, sc in sem_hits:
+            if not is_valid_agent(fr.get("agent", ""), allow_clause=(fr.get("relation") == "IF_THEN")):
+                continue
+            f_blob = f"{fr.get('agent', '')} {fr.get('patient', '')} {fr.get('raw_text', '')}"
+            f_tokens = set(tokenize_content(f_blob))
+            overlap = q_tokens.intersection(f_tokens)
+            if overlap or sc >= 0.48:
+                filtered_hits.append((fr, sc))
+
+        if filtered_hits:
+            top_frames = [fr for fr, _ in filtered_hits[:3]]
+            top_score = filtered_hits[0][1]
+            self.active_topic = top_frames[0]["agent"]
+            snippets = realizer.realize_frames(top_frames, lang=lang, max_items=3)
+            fids = [fr["id"] for fr in top_frames]
+            proofs = [
+                f"Vector recall ({sc:.2f}): {fr['agent']} {fr['relation']} {fr['patient']}"
+                for fr, sc in filtered_hits[:3]
+            ]
+            return self._reply(
+                query,
+                snippets,
+                intent="semantic_recall",
+                mode="stored",
+                confidence=min(0.95, max(0.45, top_score)),
+                recalled_ids=fids,
+                proof_steps=proofs,
+            )
+
+        ep_hits = self.episodic.recall_similar(cleaned_q, top_k=2, min_score=0.42)
+        if ep_hits:
+            best_ep, ep_score = ep_hits[0]
+            if best_ep.get("response") and best_ep.get("mode") != "unknown":
+                ep_tokens = set(tokenize_content(best_ep.get("user_input", "")))
+                if q_tokens.intersection(ep_tokens):
+                    prefix = "Pichli milti-julti baat se yaad aaya: " if lang == "hinglish" else "From a similar earlier episode: "
+                    return self._reply(
+                        query,
+                        prefix + best_ep["response"],
+                        intent="episodic_recall",
+                        mode="derived",
+                        confidence=round(ep_score * 0.85, 3),
+                        recalled_ids=best_ep.get("recalled_frame_ids", []),
+                        proof_steps=[f"Matched prior episode {best_ep['id']} (sim={ep_score:.2f})."],
+                    )
+        return None
 
     def observe_bulk(
         self,
@@ -1010,17 +998,22 @@ class Brain:
         llm_model: Optional[str] = None,
         llm_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Main cognitive turn entrypoint: process user message, learn or reason, and optionally polish via Samu Lab API."""
+        """Main cognitive turn entrypoint for NSM VB v1.5."""
         cleaned = (text or "").strip()
         if not cleaned:
             return self._reply("", "Please type a message so I can think or learn.", "empty", "unknown", 0.0, record_episode=False)
 
+        lang = detect_language(cleaned)
         low = cleaned.lower().strip(" .!?")
 
         # 1. Greetings
         if low in _GREETINGS:
             user_name = self.profile.get("name")
-            greet = f"Hello{', ' + user_name if user_name else ''}! NSM VB v1.4 is online. Teach me something new or ask me anything."
+            greet = (
+                f"Hello{', ' + user_name if user_name else ''}! NSM VB v1.5 online hai. English ya Hinglish mein kuch bhi sikhao ya pucho."
+                if lang == "hinglish"
+                else f"Hello{', ' + user_name if user_name else ''}! NSM VB v1.5 is online. Teach me anything or ask a question in English or Hinglish."
+            )
             return self._reply(cleaned, greet, "greeting", "stored", 1.0, record_episode=False)
 
         # 2. Meta-memory recall & sleep command
@@ -1028,7 +1021,7 @@ class Brain:
         if meta_res:
             return meta_res
 
-        # 3. Direct textual feedback (Surgical Credit Assignment)
+        # 3. Direct textual feedback
         fb_res = self._handle_feedback_text(cleaned)
         if fb_res:
             return fb_res
@@ -1043,86 +1036,95 @@ class Brain:
         if prof_res:
             return prof_res
 
-        # 6. Check if the input contains declarative facts to learn (supports multi-sentence bulk teaching)
-        parts = [p.strip() for p in re.split(r"(?<=[.!?;])\s+|\n+", cleaned) if p.strip()]
+        # 6. Direct self-identity check (handles multi-clause questions like "Who are you and who created you?")
+        self_res = self._handle_self_query(cleaned, lang=lang)
+        if self_res:
+            return self._maybe_enhance_with_cortex(cleaned, self_res, llm_url, llm_model, llm_key)
+
+        # 7. Compositional v1.5 Turn Parsing (extracts all statements & questions cleanly)
+        parsed = self.parser.parse_turn(cleaned, active_topic=self.active_topic)
         learned_frames: List[Dict[str, Any]] = []
         learned_summaries: List[str] = []
         rejected_notes: List[str] = []
-        question_parts: List[str] = []
-        last_subject: Optional[str] = None
 
-        for part in parts:
-            stripped_part = _strip_leadins(part)
-            if not stripped_part:
-                continue
-            first_tok = stripped_part.split()[0].lower()
-            if stripped_part.endswith("?") or first_tok in _QUESTION_STARTERS:
-                question_parts.append(stripped_part)
-                continue
-            facts = self._try_extract_local_facts(part, last_subject=last_subject)
-            for fc in facts:
-                try:
-                    fr = self.hypergraph.add_frame(
-                        relation=fc["relation"],
-                        agent=fc["agent"],
-                        patient=fc["patient"],
-                        action=fc.get("action", ""),
-                        modifier=fc.get("modifier", ""),
-                        polarity=int(fc.get("polarity", 1)),
-                        source="user",
-                        raw_text=part,
-                    )
-                    learned_frames.append(fr)
-                    learned_summaries.append(self._frame_to_sentence(fr))
-                    last_subject = fc["agent"]
-                except ValueError as ve:
-                    rejected_notes.append(str(ve))
+        for st in parsed.statements:
+            try:
+                fr = self.hypergraph.add_frame(
+                    relation=st.relation,
+                    agent=st.agent,
+                    patient=st.patient,
+                    action=st.action,
+                    modifier=st.modifier,
+                    polarity=st.polarity,
+                    source="user",
+                    raw_text=st.raw_text,
+                )
+                learned_frames.append(fr)
+                learned_summaries.append(realizer.frame_to_sentence(fr, lang=lang))
+                if st.relation != "IF_THEN":
+                    self.active_topic = fr["agent"]
+            except ValueError as ve:
+                rejected_notes.append(str(ve))
 
-        # If both facts and a question were given in one turn, answer the question after learning
-        if question_parts:
-            q_res = self._answer_query(question_parts[-1])
-            if q_res:
-                if learned_summaries:
-                    q_res["learned"] = learned_summaries
-                    q_res["response"] = f"Learned {len(learned_summaries)} fact(s). " + q_res["response"]
-                return self._maybe_enhance_with_cortex(cleaned, q_res, llm_url, llm_model, llm_key)
+        # 8. If the turn has question(s), answer the primary question after learning any statements
+        if parsed.questions:
+            primary_q = parsed.questions[-1]
+            q_res = self._dispatch_question(primary_q, cleaned)
+            if q_res is None:
+                # Only fall back to semantic search for open-ended queries (not strict boundary queries)
+                q_res = self._semantic_and_episodic_fallback(cleaned, lang=lang)
+            if q_res is None:
+                q_res = self._reply(
+                    cleaned,
+                    realizer.realize_unknown(primary_q.qtype, primary_q.subject, lang=lang),
+                    intent=primary_q.qtype.lower(),
+                    mode="unknown",
+                    confidence=0.0,
+                    proof_steps=[f"No stored match for {primary_q.qtype} on '{primary_q.subject}'."],
+                )
+            if learned_summaries:
+                q_res["learned"] = learned_summaries
+                prefix = f"Seekh liya ({len(learned_summaries)} fact). " if lang == "hinglish" else f"Learned {len(learned_summaries)} fact(s). "
+                q_res["response"] = prefix + q_res["response"]
+            return self._maybe_enhance_with_cortex(cleaned, q_res, llm_url, llm_model, llm_key)
 
-        # Pure teaching turn
-        if learned_frames and not question_parts:
+        # 9. Pure teaching turn
+        if learned_frames:
             fids = [f["id"] for f in learned_frames]
             proofs = [f"Stored role-bound frame: {f['agent']} {f['relation']} {f['patient']} (pol={f['polarity']})" for f in learned_frames]
             if len(learned_summaries) == 1:
-                reply_text = f"Learned and bound in memory: {learned_summaries[0]}"
+                reply_text = (
+                    f"Yaad rakh liya: {learned_summaries[0]}"
+                    if lang == "hinglish"
+                    else f"Learned and bound in memory: {learned_summaries[0]}"
+                )
             else:
-                reply_text = f"Learned {len(learned_summaries)} structured facts: " + " ".join(learned_summaries[:4])
+                reply_text = (
+                    f"{len(learned_summaries)} naye facts seekh liye: " + " ".join(learned_summaries[:4])
+                    if lang == "hinglish"
+                    else f"Learned {len(learned_summaries)} structured facts: " + " ".join(learned_summaries[:4])
+                )
             res = self._reply(
-                cleaned,
-                reply_text,
-                intent="teach",
-                mode="stored",
-                confidence=0.95,
-                recalled_ids=fids,
-                proof_steps=proofs,
+                cleaned, reply_text, intent="teach", mode="stored",
+                confidence=0.95, recalled_ids=fids, proof_steps=proofs,
                 learned=learned_summaries,
             )
             return self._maybe_enhance_with_cortex(cleaned, res, llm_url, llm_model, llm_key)
 
-        if rejected_notes and not question_parts:
+        if rejected_notes:
             return self._reply(
                 cleaned,
                 f"I skipped that because: {rejected_notes[0]}",
-                intent="reject",
-                mode="unknown",
-                confidence=0.9,
+                intent="reject", mode="unknown", confidence=0.9,
                 proof_steps=rejected_notes,
             )
 
-        # 7. Symbolic query & vector/episodic recall
-        q_res = self._answer_query(cleaned)
-        if q_res:
-            return self._maybe_enhance_with_cortex(cleaned, q_res, llm_url, llm_model, llm_key)
+        # 10. Open paraphrase / bare-topic semantic & episodic recall
+        sem_res = self._semantic_and_episodic_fallback(cleaned, lang=lang)
+        if sem_res:
+            return self._maybe_enhance_with_cortex(cleaned, sem_res, llm_url, llm_model, llm_key)
 
-        # 8. Optional Samu Lab API Cortex fallback: sarcasm check + fact extraction + grounded chat
+        # 11. Optional Samu Lab API Cortex fallback (sarcasm + complex fact extraction)
         if llm_url and llm_model:
             analysis = cortex_api.analyze_with_cortex(cleaned, llm_url, llm_model, llm_key)
             if analysis:
@@ -1131,12 +1133,9 @@ class Brain:
                     return self._reply(
                         cleaned,
                         f"Caught the sarcasm — {fb['message']} Let me know the correct detail.",
-                        intent="feedback_negative",
-                        mode="stored",
-                        confidence=0.9,
+                        intent="feedback_negative", mode="stored", confidence=0.9,
                         proof_steps=["Cortex detected sarcastic negative feedback.", fb["message"]],
-                        cortex_used=True,
-                        record_episode=False,
+                        cortex_used=True, record_episode=False,
                     )
                 api_facts = analysis.get("facts") or []
                 api_learned: List[str] = []
@@ -1144,42 +1143,35 @@ class Brain:
                 for fc in api_facts[:5]:
                     if not isinstance(fc, dict):
                         continue
-                    ag = _clean_phrase(str(fc.get("agent", "")))
-                    pat = _clean_phrase(str(fc.get("patient", "")))
+                    ag = clean_phrase(str(fc.get("agent", "")))
+                    pat = clean_phrase(str(fc.get("patient", "")))
                     if ag and pat:
                         try:
                             fr = self.hypergraph.add_frame(
                                 relation=str(fc.get("relation", "RELATED_TO")),
-                                agent=ag,
-                                patient=pat,
+                                agent=ag, patient=pat,
                                 action=str(fc.get("action", "")),
                                 polarity=int(fc.get("polarity", 1)),
-                                source="cortex",
-                                raw_text=cleaned,
+                                source="cortex", raw_text=cleaned,
                             )
                             api_fids.append(fr["id"])
-                            api_learned.append(self._frame_to_sentence(fr))
+                            api_learned.append(realizer.frame_to_sentence(fr, lang=lang))
                         except ValueError:
                             pass
                 if api_learned:
                     base_ans = "Learned via Cortex parsing: " + " ".join(api_learned)
                     res = self._reply(
-                        cleaned,
-                        base_ans,
-                        intent="teach",
-                        mode="stored",
-                        confidence=0.88,
-                        recalled_ids=api_fids,
+                        cleaned, base_ans, intent="teach", mode="stored",
+                        confidence=0.88, recalled_ids=api_fids,
                         proof_steps=["Samu Lab Cortex extracted structured role-filler facts."],
-                        learned=api_learned,
-                        cortex_used=True,
+                        learned=api_learned, cortex_used=True,
                     )
                     return self._maybe_enhance_with_cortex(cleaned, res, llm_url, llm_model, llm_key)
 
-        # 9. Honest unknown response (with optional Cortex conversational help)
+        # 12. Honest, natural unknown response
         unknown_res = self._reply(
             cleaned,
-            "I do not have that in my memory yet. Teach me with a clear statement (for example: 'X is a Y' or 'X can Y') and I will store and reason with it.",
+            realizer.realize_unknown(lang=lang),
             intent="unknown",
             mode="unknown",
             confidence=0.0,
@@ -1197,12 +1189,11 @@ class Brain:
     ) -> Dict[str, Any]:
         if not llm_url or not llm_model:
             return result
-        # Gather short context snippets from recalled frames
         recalled_ctx = []
         for fid in result.get("recalled_frame_ids", [])[:4]:
             fr = self.hypergraph.frames.get(fid)
             if fr:
-                recalled_ctx.append(self._frame_to_sentence(fr))
+                recalled_ctx.append(realizer.frame_to_sentence(fr))
 
         polished = cortex_api.realize_with_cortex(
             user_text=user_text,
@@ -1217,7 +1208,6 @@ class Brain:
         if polished:
             result["response"] = polished
             result["cortex_used"] = True
-            # Keep the latest episode response synchronized with polished reply
             if self.episodic.episodes and self.episodic.episodes[-1].get("id") == result.get("episode_id"):
                 self.episodic.episodes[-1]["response"] = polished[:500]
         return result
@@ -1226,13 +1216,16 @@ class Brain:
         last_ep = self.episodic.get_last_episode(skip_meta=True)
         return {
             "version": self.version,
-            "engine": "NSM VB v1.4 (NeuraSaMu)",
+            "engine": f"NSM VB v{self.version} (NeuraSaMu)",
             "frames": len(self.hypergraph.frames),
             "senses": len(self.hypergraph.senses),
             "episodes": len(self.episodic.episodes),
             "schemas": len(self.episodic.schemas),
             "total_consolidated": self.episodic.total_consolidated_episodes,
             "turn_count": self.turn_count,
+            "active_topic": self.active_topic,
+            "installed_skills": len(self.skills.get("installed", {})),
+            "custom_patterns": len(self.language_extensions.get("custom_patterns", [])),
             "profile": self.profile,
             "last_episode": {
                 "id": last_ep.get("id"),
@@ -1245,12 +1238,16 @@ class Brain:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "nsm_version": self.VERSION,
+            "package_type": "brain",
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "turn_count": self.turn_count,
+            "active_topic": self.active_topic,
             "profile": self.profile,
             "hypergraph": self.hypergraph.to_dict(),
             "episodic": self.episodic.to_dict(),
+            "skills": self.skills,
+            "language_extensions": self.language_extensions,
         }
 
     @classmethod
@@ -1259,11 +1256,13 @@ class Brain:
         if not isinstance(data, dict):
             return brain
 
-        # Native v1.4 load
-        if data.get("nsm_version") == "1.4":
+        # Native v1.4 and v1.5 load (plus portable skill/pattern packs)
+        if str(data.get("nsm_version", "")) in {"1.4", "1.5"} or "hypergraph" in data:
             brain.created_at = float(data.get("created_at", brain.created_at))
             brain.updated_at = float(data.get("updated_at", brain.updated_at))
             brain.turn_count = int(data.get("turn_count", 0))
+            if data.get("active_topic"):
+                brain.active_topic = str(data["active_topic"])
             if isinstance(data.get("profile"), dict):
                 brain.profile.update(data["profile"])
             loaded_hg = TypedHypergraph.from_dict(data.get("hypergraph"))
@@ -1272,16 +1271,25 @@ class Brain:
             for fid, fr in loaded_hg.frames.items():
                 brain.hypergraph.frames[fid] = fr
                 brain.hypergraph._index_frame_in_ram(fr)
-            brain.episodic = EpisodicMemory.from_dict(data.get("episodic"))
+            if isinstance(data.get("episodic"), dict):
+                brain.episodic = EpisodicMemory.from_dict(data.get("episodic"))
+            if isinstance(data.get("skills"), dict):
+                if isinstance(data["skills"].get("installed"), dict):
+                    brain.skills["installed"].update(data["skills"]["installed"])
+                if isinstance(data["skills"].get("mcp_servers"), dict):
+                    brain.skills["mcp_servers"].update(data["skills"]["mcp_servers"])
+            if isinstance(data.get("language_extensions"), dict):
+                pats = data["language_extensions"].get("custom_patterns", [])
+                if isinstance(pats, list):
+                    brain.language_extensions["custom_patterns"] = list(pats)
+                    brain.parser.load_custom_patterns(pats)
             return brain
 
-        # Legacy NSM v1.x auto-migration (facts / relations / memory)
         brain._migrate_legacy(data)
         return brain
 
     def _migrate_legacy(self, data: Dict[str, Any]) -> None:
-        """Import older NSM v1.x JSON brain exports cleanly into v1.4 hypergraph."""
-        # Migrate legacy relations list/dict
+        """Import older NSM v1.x JSON brain exports cleanly into v1.5 hypergraph."""
         rels = data.get("relations")
         if isinstance(rels, list):
             for item in rels[:1500]:
@@ -1309,7 +1317,6 @@ class Brain:
                                 except ValueError:
                                     pass
 
-        # Migrate legacy flat facts dict
         facts = data.get("facts")
         if isinstance(facts, dict):
             for k, v in list(facts.items())[:500]:

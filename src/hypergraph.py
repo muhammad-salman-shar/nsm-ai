@@ -452,6 +452,280 @@ class TypedHypergraph:
         results.sort(key=lambda item: item[1], reverse=True)
         return results
 
+    def resolve_alias(self, term: str) -> str:
+        """Resolve an entity name or alias (ALSO_KNOWN_AS) to its primary graph node."""
+        norm = normalize_entity(term)
+        if not norm:
+            return norm
+        if norm in self._by_agent:
+            # If node only exists as an alias pointing to a richer node, follow it
+            aka_out = self.get_frames_for_agent(norm, relation="ALSO_KNOWN_AS")
+            if aka_out and len(self._by_agent.get(norm, set())) == len(aka_out):
+                target = aka_out[0].get("patient", "")
+                if target and target in self._by_agent:
+                    return target
+            return norm
+        # Reverse alias check: user asked about the alias stored in patient
+        aka_in = self.get_frames_for_patient(norm, relation="ALSO_KNOWN_AS")
+        if aka_in:
+            return aka_in[0].get("agent", norm)
+        return norm
+
+    def get_frames_by_relation(self, relation: str) -> List[Dict[str, Any]]:
+        rel = (relation or "").strip().upper()
+        fids = self._by_relation.get(rel, set())
+        frames = [self.frames[fid] for fid in fids if fid in self.frames]
+        frames.sort(key=lambda x: (self.bayesian_confidence(x), x.get("updated_at", 0.0)), reverse=True)
+        return frames
+
+    def query_examples(self, category: str, limit: int = 6) -> Dict[str, Any]:
+        """Find concrete instances/examples of a category via reverse IS_A and HAS_BRANCHES."""
+        cat = self.resolve_alias(category)
+        # Handle simple plural category names (e.g. "data structures" -> "data structure")
+        candidates = [cat]
+        if cat.endswith("s") and len(cat) > 3:
+            candidates.append(cat[:-1])
+
+        matched_frames: List[Dict[str, Any]] = []
+        examples: List[str] = []
+        seen_ex: Set[str] = set()
+
+        for c in candidates:
+            rev_isa = self.get_frames_for_patient(c, relation="IS_A")
+            for fr in rev_isa:
+                if fr.get("polarity", 1) > 0 and self.bayesian_confidence(fr) >= 0.35:
+                    ag = fr.get("agent", "")
+                    if ag and ag not in seen_ex:
+                        seen_ex.add(ag)
+                        examples.append(ag)
+                        matched_frames.append(fr)
+            br_frames = self.get_frames_for_agent(c, relation="HAS_BRANCHES")
+            for fr in br_frames:
+                if self.bayesian_confidence(fr) >= 0.35 and fr not in matched_frames:
+                    matched_frames.append(fr)
+
+        if matched_frames:
+            top_frames = matched_frames[:limit]
+            avg_conf = sum(self.bayesian_confidence(f) for f in top_frames) / len(top_frames)
+            proofs = [
+                f"Instance lookup: {f['agent']} {f['relation']} {f['patient']} (conf={self.bayesian_confidence(f)})"
+                for f in top_frames
+            ]
+            return {
+                "mode": "stored",
+                "examples": examples[:limit],
+                "frames": top_frames,
+                "used_frame_ids": [f["id"] for f in top_frames],
+                "confidence": round(avg_conf, 3),
+                "proof_steps": proofs,
+            }
+
+        return {
+            "mode": "unknown",
+            "examples": [],
+            "frames": [],
+            "used_frame_ids": [],
+            "confidence": 0.0,
+            "proof_steps": [f"No IS_A instances or branches found for '{cat}'."],
+        }
+
+    def query_causal(self, effect: str) -> Dict[str, Any]:
+        """Find what causes an effect via CAUSES (reverse) and IF_THEN (reverse)."""
+        eff = self.resolve_alias(effect)
+        eff_tokens = set(tokenize_content(eff))
+        matches: List[Tuple[Dict[str, Any], float]] = []
+
+        for rel in ("CAUSES", "IF_THEN"):
+            for fr in self.get_frames_by_relation(rel):
+                if self.bayesian_confidence(fr) < 0.35:
+                    continue
+                pat = fr.get("patient", "")
+                ag = fr.get("agent", "")
+                if eff == pat or (eff and eff in pat):
+                    matches.append((fr, 1.0))
+                elif eff == ag or (eff and eff in ag):
+                    matches.append((fr, 0.85))
+                elif eff_tokens:
+                    pat_toks = set(tokenize_content(pat))
+                    overlap = len(eff_tokens.intersection(pat_toks))
+                    if overlap >= max(1, len(eff_tokens) // 2 + 1) or (len(eff_tokens) == 1 and overlap == 1):
+                        matches.append((fr, overlap / max(1, len(eff_tokens))))
+
+        matches.sort(key=lambda x: (x[1], self.bayesian_confidence(x[0])), reverse=True)
+        if matches:
+            top = [f for f, _ in matches[:3]]
+            conf = round(self.bayesian_confidence(top[0]), 3)
+            proofs = [
+                f"Causal trace: {f['agent']} {f['relation']} {f['patient']} (conf={self.bayesian_confidence(f)})"
+                for f in top
+            ]
+            return {
+                "mode": "stored",
+                "frames": top,
+                "used_frame_ids": [f["id"] for f in top],
+                "confidence": conf,
+                "proof_steps": proofs,
+            }
+        return {
+            "mode": "unknown",
+            "frames": [],
+            "used_frame_ids": [],
+            "confidence": 0.0,
+            "proof_steps": [f"No causal rule found for '{eff}'."],
+        }
+
+    def query_consequence(self, condition: str) -> Dict[str, Any]:
+        """Find what happens if a condition occurs via IF_THEN and forward CAUSES."""
+        cond = normalize_entity(condition)
+        cond_tokens = set(tokenize_content(cond))
+        matches: List[Tuple[Dict[str, Any], float]] = []
+
+        for rel in ("IF_THEN", "CAUSES"):
+            for fr in self.get_frames_by_relation(rel):
+                if self.bayesian_confidence(fr) < 0.35:
+                    continue
+                ag = fr.get("agent", "")
+                if cond == ag or (cond and (cond in ag or ag in cond)):
+                    matches.append((fr, 1.0))
+                elif cond_tokens:
+                    ag_toks = set(tokenize_content(ag))
+                    overlap = len(cond_tokens.intersection(ag_toks))
+                    if overlap >= 2 or (len(cond_tokens) == 1 and overlap == 1):
+                        score = overlap / max(1, len(cond_tokens.union(ag_toks)))
+                        matches.append((fr, score))
+
+        matches.sort(key=lambda x: (x[1], self.bayesian_confidence(x[0])), reverse=True)
+        if matches:
+            top = [f for f, _ in matches[:3]]
+            conf = round(self.bayesian_confidence(top[0]), 3)
+            proofs = [
+                f"Consequence rule: IF {f['agent']} -> {f['patient']} (conf={self.bayesian_confidence(f)})"
+                for f in top
+            ]
+            return {
+                "mode": "stored",
+                "frames": top,
+                "used_frame_ids": [f["id"] for f in top],
+                "confidence": conf,
+                "proof_steps": proofs,
+            }
+        return {
+            "mode": "unknown",
+            "frames": [],
+            "used_frame_ids": [],
+            "confidence": 0.0,
+            "proof_steps": [f"No IF_THEN or causal consequence stored for '{cond}'."],
+        }
+
+    def query_verify(self, subject: str, relation: str, target: str) -> Dict[str, Any]:
+        """Polar Yes/No verification with inheritance, definition check, and strict unknown boundary."""
+        subj = self.resolve_alias(subject)
+        tgt = normalize_entity(target)
+        rel = (relation or "IS_A").upper()
+
+        # 1. Direct & inherited relation check
+        res = self.query_capability_or_relation(subj, rel, tgt)
+        if res["mode"] in {"stored", "derived", "contradicted"}:
+            return res
+
+        # 2. Check cross-relations for IS_A / DEFINED_AS / HAS_PART / HAS
+        alt_rels = ["DEFINED_AS", "IS_A", "HAS", "HAS_PART", "ALSO_KNOWN_AS"]
+        tgt_tokens = set(tokenize_content(tgt))
+        for alt in alt_rels:
+            for fr in self.get_frames_for_agent(subj, relation=alt):
+                if self.bayesian_confidence(fr) < 0.35:
+                    continue
+                pat = fr.get("patient", "")
+                if tgt == pat or (len(tgt) >= 3 and re.search(r"\b" + re.escape(tgt) + r"\b", pat)):
+                    return {
+                        "mode": "stored",
+                        "polarity": fr.get("polarity", 1),
+                        "frames": [fr],
+                        "used_frame_ids": [fr["id"]],
+                        "confidence": self.bayesian_confidence(fr),
+                        "proof_steps": [
+                            f"Verified via {alt}: {fr['agent']} {alt} {fr['patient']} (conf={self.bayesian_confidence(fr)})"
+                        ],
+                    }
+                if tgt_tokens and len(tgt_tokens) >= 2:
+                    pat_tokens = set(tokenize_content(pat))
+                    if tgt_tokens.issubset(pat_tokens):
+                        return {
+                            "mode": "stored",
+                            "polarity": fr.get("polarity", 1),
+                            "frames": [fr],
+                            "used_frame_ids": [fr["id"]],
+                            "confidence": self.bayesian_confidence(fr),
+                            "proof_steps": [
+                                f"Verified via {alt} tokens: {fr['agent']} {alt} {fr['patient']}"
+                            ],
+                        }
+
+        # 3. Unknown (attach known frames about subject so realizer can give a helpful honest reply)
+        known = self.get_frames_for_agent(subj)[:2]
+        return {
+            "mode": "unknown",
+            "polarity": 0,
+            "frames": known,
+            "used_frame_ids": [f["id"] for f in known],
+            "confidence": 0.0,
+            "proof_steps": [f"No direct or inherited link confirms '{subj} {rel} {tgt}'."],
+        }
+
+    def compare_entities(self, entity_a: str, entity_b: str) -> Dict[str, Any]:
+        """Compare two entities using explicit COMPARED_TO links plus side-by-side hypergraph profiles."""
+        a = self.resolve_alias(entity_a)
+        b = self.resolve_alias(entity_b)
+
+        direct_comp: List[Dict[str, Any]] = []
+        for fr in self.get_frames_by_relation("COMPARED_TO"):
+            ag, pat = fr.get("agent", ""), fr.get("patient", "")
+            if (ag == a and pat == b) or (ag == b and pat == a):
+                direct_comp.append(fr)
+
+        frames_a = self.get_frames_for_agent(a)[:3]
+        frames_b = self.get_frames_for_agent(b)[:3]
+
+        if not direct_comp and not frames_a and not frames_b:
+            return {
+                "mode": "unknown",
+                "entity_a": a,
+                "entity_b": b,
+                "direct_comparisons": [],
+                "frames_a": [],
+                "frames_b": [],
+                "shared_categories": [],
+                "used_frame_ids": [],
+                "confidence": 0.0,
+                "proof_steps": [f"No stored facts found for '{a}' or '{b}' to compare."],
+            }
+
+        cats_a = {f["patient"] for f in self.get_frames_for_agent(a, relation="IS_A") if f.get("polarity", 1) > 0}
+        cats_b = {f["patient"] for f in self.get_frames_for_agent(b, relation="IS_A") if f.get("polarity", 1) > 0}
+        shared = sorted(cats_a.intersection(cats_b))
+
+        used_frames = direct_comp + frames_a + frames_b
+        used_ids = list(dict.fromkeys(f["id"] for f in used_frames))
+        avg_conf = sum(self.bayesian_confidence(f) for f in used_frames) / max(1, len(used_frames))
+        proofs = [
+            f"Compare node: {f['agent']} {f['relation']} {f['patient']} (conf={self.bayesian_confidence(f)})"
+            for f in used_frames[:6]
+        ]
+
+        mode = "stored" if (direct_comp or (frames_a and frames_b)) else "derived"
+        return {
+            "mode": mode,
+            "entity_a": a,
+            "entity_b": b,
+            "direct_comparisons": direct_comp,
+            "frames_a": frames_a,
+            "frames_b": frames_b,
+            "shared_categories": shared,
+            "used_frame_ids": used_ids,
+            "confidence": round(avg_conf, 3),
+            "proof_steps": proofs,
+        }
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "senses": self.senses,

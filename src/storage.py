@@ -129,7 +129,7 @@ def validate_brain_file(data: Any) -> Tuple[bool, str]:
         return False, "Brain file must be a JSON object."
 
     # Native v1.4 schema
-    if data.get("nsm_version") == "1.4":
+    if data.get("nsm_version") in {"1.4", "1.5"}:
         if "hypergraph" not in data or not isinstance(data["hypergraph"], dict):
             return False, "Missing 'hypergraph' section in v1.4 brain file."
         return True, "Valid NSM v1.4 brain file."
@@ -202,6 +202,24 @@ def merge_brain_data(
             cur_profile[k] = v
 
     merged["updated_at"] = time.time()
+    # Merge future-proof skills & language_extensions packs safely
+    base_skills = base.get("skills") if isinstance(base.get("skills"), dict) else {}
+    inc_skills = incoming.get("skills") if isinstance(incoming.get("skills"), dict) else {}
+    merged["skills"] = {
+        "installed": {**(base_skills.get("installed") or {}), **(inc_skills.get("installed") or {})},
+        "mcp_servers": {**(base_skills.get("mcp_servers") or {}), **(inc_skills.get("mcp_servers") or {})},
+    }
+    base_ext = (base.get("language_extensions") or {}).get("custom_patterns") or []
+    inc_ext = (incoming.get("language_extensions") or {}).get("custom_patterns") or []
+    seen_pids = set()
+    merged_pats = []
+    for p in list(base_ext) + list(inc_ext):
+        if isinstance(p, dict):
+            pid = p.get("id") or p.get("pattern")
+            if pid and pid not in seen_pids:
+                seen_pids.add(pid)
+                merged_pats.append(p)
+    merged["language_extensions"] = {"custom_patterns": merged_pats}
     return merged
 
 

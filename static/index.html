@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>NSM VB v1.4 - NeuraSaMu</title>
+<title>NSM VB v1.5 - NeuraSaMu</title>
 <style>
   :root {
     --bg: #0b0f14;
@@ -791,7 +791,7 @@
         <div class="brand-row">
           <span class="pulse-dot"></span>
           <span class="brand-title" id="active-brain-name">default</span>
-          <span class="ver-pill">v1.4</span>
+          <span class="ver-pill">v1.5</span>
         </div>
         <div class="hud-sub" id="hud-stats">Loading cognitive engine...</div>
       </div>
@@ -830,7 +830,7 @@
 <aside id="sidebar">
   <div class="sb-head">
     <div>
-      <div style="font-weight:800;font-size:16px;">NSM VB <span style="color:var(--accent);">v1.4</span></div>
+      <div style="font-weight:800;font-size:16px;">NSM VB <span style="color:var(--accent);">v1.5</span></div>
       <div style="font-size:11px;color:var(--text-dim);">NeuraSaMu Cognitive Engine</div>
     </div>
     <button class="icon-btn" onclick="closeSidebar()">
@@ -862,7 +862,7 @@
 <div id="settings-modal" onclick="if(event.target===this) closeModal()">
   <div class="modal-sheet">
     <div class="modal-head">
-      <div style="font-weight:800;font-size:16px;">NSM VB v1.4 Settings</div>
+      <div style="font-weight:800;font-size:16px;">NSM VB v1.5 Settings</div>
       <button class="icon-btn" onclick="closeModal()">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -1042,7 +1042,7 @@ function renderMessages() {
         <div class="hero-orb">
           <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1a3 3 0 0 1 2 5.2A4 4 0 0 1 16 19h-1v2a1 1 0 0 1-2 0v-2h-2v2a1 1 0 0 1-2 0v-2H8a4 4 0 0 1-2-6.8A3 3 0 0 1 8 7V6a4 4 0 0 1 4-4z"/></svg>
         </div>
-        <h1>NSM VB v1.4</h1>
+        <h1>NSM VB v1.5</h1>
         <p>NeuraSaMu Neuro-Symbolic Virtual Brain with role-bound hypergraph memory, proof-tracked reasoning, surgical feedback, and Samu Lab API support.</p>
         <div class="chip-grid">
           <button class="starter-chip" onclick="quickSend('Who are you and who created you?')">
@@ -1427,7 +1427,7 @@ function renderChatList() {
 
 function formatChatAsTxt(chat) {
   const lines = [
-    "NSM VB v1.4 Chat Transcript",
+    "NSM VB v1.5 Chat Transcript",
     "Brain: " + activeBrain,
     "Chat: " + (chat.title || "Session"),
     "Exported: " + new Date().toLocaleString(),
@@ -1592,7 +1592,7 @@ async function exportMemory() {
     });
     const payload = await res.json();
     const jsonStr = JSON.stringify(payload, null, 2);
-    const fname = `NSM_Brain_${activeBrain}_v1.4.json`;
+    const fname = `NSM_Brain_${activeBrain}_v1.5.json`;
     if (window.Android && typeof window.Android.shareBrain === "function") {
       window.Android.shareBrain(jsonStr, fname);
       showToast("Sharing brain file...");

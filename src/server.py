@@ -1,4 +1,4 @@
-"""Thread-safe HTTP server for NSM VB v1.4 (Android WebView + API + OpenAI compatible)."""
+"""Thread-safe HTTP server for NSM VB v1.5 (Android WebView + API + OpenAI compatible)."""
 
 import json
 import os
@@ -284,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
                     _send_json(self, 400, {"error": f"Invalid NSM file: {reason}"})
                     return
                 with _get_lock(uid):
-                    # Convert incoming (v1.4 or legacy) into normalized v1.4 dict
+                    # Convert incoming (v1.5 or legacy) into normalized v1.5 dict
                     incoming_brain = Brain.from_dict(import_data)
                     incoming_v14 = incoming_brain.to_dict()
                     current_state = storage.load_brain(uid)
