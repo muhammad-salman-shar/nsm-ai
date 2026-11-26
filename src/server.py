@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from src import cortex_api, storage
 from src.brain import Brain
+from src import skills as skill_engine
 
 STATIC_DIR = "static"
 _CACHE_LOCK = threading.RLock()
@@ -119,6 +120,13 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/state":
                 brain = get_brain(user_id)
                 _send_json(self, 200, brain.state())
+            elif parsed.path == "/skills":
+                brain = get_brain(user_id)
+                _send_json(self, 200, {
+                    "ok": True,
+                    "skills": skill_engine.list_skills_summary(brain),
+                    "prompt_template": skill_engine.AI_SKILL_GENERATOR_PROMPT,
+                })
             elif parsed.path == "/brains":
                 brains = storage.list_brains()
                 if "default" not in brains:
@@ -275,10 +283,90 @@ class Handler(BaseHTTPRequestHandler):
                     payload = brain.to_dict()
                 _send_json(self, 200, payload)
 
+            elif parsed.path == "/skills/import":
+                uid = storage.sanitize_user_id(data.get("user_id", "default"))
+                skill_payload = data.get("skill_data")
+                if isinstance(skill_payload, str):
+                    try:
+                        skill_payload = json.loads(skill_payload)
+                    except Exception as je:
+                        _send_json(self, 400, {"error": f"Invalid JSON format: {je}"})
+                        return
+                with _get_lock(uid):
+                    brain = get_brain(uid)
+                    res = skill_engine.install_skill_package(brain, skill_payload)
+                    if not res.get("ok"):
+                        _send_json(self, 400, {"error": res.get("error", "Invalid skill pack")})
+                        return
+                    storage.save_brain(uid, brain.to_dict())
+                    _send_json(self, 200, {
+                        **res,
+                        "skills": skill_engine.list_skills_summary(brain),
+                        "stats": brain.state(),
+                    })
+
+            elif parsed.path == "/skills/toggle":
+                uid = storage.sanitize_user_id(data.get("user_id", "default"))
+                sid = str(data.get("skill_id") or "").strip()
+                enabled = bool(data.get("enabled", True))
+                with _get_lock(uid):
+                    brain = get_brain(uid)
+                    res = skill_engine.toggle_skill(brain, sid, enabled)
+                    if not res.get("ok"):
+                        _send_json(self, 404, {"error": res.get("error", "Skill not found")})
+                        return
+                    storage.save_brain(uid, brain.to_dict())
+                    _send_json(self, 200, {
+                        **res,
+                        "skills": skill_engine.list_skills_summary(brain),
+                        "stats": brain.state(),
+                    })
+
+            elif parsed.path == "/skills/delete":
+                uid = storage.sanitize_user_id(data.get("user_id", "default"))
+                sid = str(data.get("skill_id") or "").strip()
+                with _get_lock(uid):
+                    brain = get_brain(uid)
+                    res = skill_engine.delete_skill(brain, sid)
+                    if not res.get("ok"):
+                        _send_json(self, 404, {"error": res.get("error", "Skill not found")})
+                        return
+                    storage.save_brain(uid, brain.to_dict())
+                    _send_json(self, 200, {
+                        **res,
+                        "skills": skill_engine.list_skills_summary(brain),
+                        "stats": brain.state(),
+                    })
+
+            elif parsed.path == "/skills/export":
+                uid = storage.sanitize_user_id(data.get("user_id", "default"))
+                sid = data.get("skill_id")
+                with _get_lock(uid):
+                    brain = get_brain(uid)
+                    res = skill_engine.export_skills_package(brain, skill_id=sid)
+                if not res.get("ok"):
+                    _send_json(self, 404, {"error": res.get("error", "Skill not found")})
+                    return
+                _send_json(self, 200, res)
+
             elif parsed.path == "/import":
                 uid = storage.sanitize_user_id(data.get("user_id", "default"))
                 import_data = data.get("brain_data")
                 mode = data.get("mode", "merge")
+                if isinstance(import_data, dict) and str(import_data.get("package_type", "")).lower() in {"skill_pack", "skill_bundle"}:
+                    with _get_lock(uid):
+                        brain = get_brain(uid)
+                        res = skill_engine.install_skill_package(brain, import_data)
+                        if not res.get("ok"):
+                            _send_json(self, 400, {"error": res.get("error", "Invalid skill pack")})
+                            return
+                        storage.save_brain(uid, brain.to_dict())
+                        _send_json(self, 200, {
+                            "ok": True,
+                            "message": res.get("message", "Skill installed."),
+                            "stats": brain.state(),
+                        })
+                    return
                 valid, reason = storage.validate_brain_file(import_data)
                 if not valid:
                     _send_json(self, 400, {"error": f"Invalid NSM file: {reason}"})

@@ -797,6 +797,9 @@
       </div>
     </div>
     <div class="hdr-actions">
+      <button class="icon-btn" id="skills-header-btn" onclick="openSkillsTab()" title="Teach Skills">
+        <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </button>
       <button class="icon-btn" id="sleep-btn" onclick="triggerSleep()" title="Sleep Consolidation">
         <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
@@ -869,6 +872,7 @@
     </div>
     <div class="modal-tabs">
       <button class="tab-btn active" onclick="switchTab('tab-api', this)">Samu Lab API</button>
+      <button class="tab-btn" id="tab-btn-skills" onclick="switchTab('tab-skills', this); loadSkillsPanel();">Teach Skills</button>
       <button class="tab-btn" onclick="switchTab('tab-memory', this)">Brain &amp; Data</button>
       <button class="tab-btn" onclick="switchTab('tab-general', this)">Appearance &amp; PIN</button>
     </div>
@@ -895,6 +899,27 @@
           <button class="btn" onclick="testLLMConnection()">Test Connection</button>
         </div>
         <div id="test-llm-result" class="status-box"></div>
+      </div>
+
+      <!-- Teach Skills Tab -->
+      <div id="tab-skills" class="tab-pane">
+        <div style="font-size:12.5px;color:var(--text-dim);line-height:1.45;">
+          Teach NSM new skills 100% offline: copy the <b>Master AI Prompt</b>, paste it into ChatGPT or Gemini to generate a Skill JSON, and import or paste it below.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" style="flex:1;min-width:130px;" onclick="copySkillPrompt()">Copy AI Prompt</button>
+          <button class="btn" style="flex:1;min-width:130px;" onclick="document.getElementById('skill-import-file').click()">Import Skill File</button>
+          <button class="btn" onclick="exportAllSkills()">Export All</button>
+          <input id="skill-import-file" type="file" accept=".json,application/json" style="display:none;" onchange="importSkillFile(event)" />
+        </div>
+        <div>
+          <label class="field-label" for="skill-json-paste">Quick Paste Skill JSON (from ChatGPT / Gemini)</label>
+          <textarea id="skill-json-paste" class="input-field" rows="3" style="font-family:monospace;font-size:11.5px;resize:vertical;" placeholder='Paste {"package_type":"skill_pack", ...} here and tap Install'></textarea>
+          <button class="btn" style="width:100%;margin-top:6px;" onclick="importPastedSkill()">Install Pasted Skill JSON</button>
+        </div>
+        <div id="skill-status" class="status-box"></div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;">Installed Skills</div>
+        <div id="skills-list" style="display:flex;flex-direction:column;gap:8px;"></div>
       </div>
 
       <!-- Brain & Data Tab -->
@@ -1580,6 +1605,262 @@ async function testLLMConnection() {
   } catch (e) {
     box.className = "status-box err";
     box.textContent = "Network error: " + e.message;
+  }
+}
+
+let cachedSkillPrompt = "";
+
+function openSkillsTab() {
+  const modal = document.getElementById("settings-modal");
+  if (modal) modal.classList.add("open");
+  const btn = document.getElementById("tab-btn-skills");
+  if (btn && typeof switchTab === "function") {
+    switchTab("tab-skills", btn);
+  }
+  loadSkillsPanel();
+}
+
+function copyTextFallback(text) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function copySkillPrompt() {
+  const box = document.getElementById("skill-status");
+  try {
+    if (!cachedSkillPrompt) {
+      const res = await fetch(`/skills?user_id=${encodeURIComponent(activeBrain)}`);
+      const data = await res.json();
+      if (data.prompt_template) cachedSkillPrompt = data.prompt_template;
+    }
+    if (!cachedSkillPrompt) throw new Error("Prompt template unavailable");
+    let copied = false;
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(cachedSkillPrompt);
+        copied = true;
+      } catch (e) {
+        copied = copyTextFallback(cachedSkillPrompt);
+      }
+    } else {
+      copied = copyTextFallback(cachedSkillPrompt);
+    }
+    if (copied) {
+      if (box) {
+        box.className = "status-box ok";
+        box.textContent = "Master AI Skill Prompt copied! Paste it into ChatGPT or Gemini and replace [WRITE YOUR SKILL TOPIC HERE].";
+      }
+      if (typeof showToast === "function") showToast("AI Skill Prompt copied!");
+    } else {
+      throw new Error("Clipboard permission blocked");
+    }
+  } catch (e) {
+    if (box) {
+      box.className = "status-box err";
+      box.textContent = "Copy failed: " + e.message;
+    }
+  }
+}
+
+async function loadSkillsPanel() {
+  const listEl = document.getElementById("skills-list");
+  if (!listEl) return;
+  try {
+    const res = await fetch(`/skills?user_id=${encodeURIComponent(activeBrain)}`);
+    const data = await res.json();
+    if (data.prompt_template) cachedSkillPrompt = data.prompt_template;
+    renderSkillsList(data.skills || []);
+  } catch (e) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--danger);">Failed to load skills: ${e.message}</div>`;
+  }
+}
+
+function renderSkillsList(skills) {
+  const listEl = document.getElementById("skills-list");
+  if (!listEl) return;
+  if (!skills.length) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--text-dim);padding:10px;border:1px dashed var(--border);border-radius:10px;text-align:center;">No custom skills installed yet. Copy the AI Prompt above to create your first skill!</div>`;
+    return;
+  }
+  listEl.innerHTML = skills.map(sk => {
+    const safeId = String(sk.id || "").replace(/'/g, "");
+    const checked = sk.enabled ? "checked" : "";
+    const badgeColor = sk.enabled ? "#22c55e" : "#888";
+    const badgeText = sk.enabled ? "ACTIVE" : "OFF";
+    return `
+      <div style="border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--bg-elevated, rgba(255,255,255,0.03));display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-weight:700;font-size:13.5px;">${sk.name} <span style="font-size:10px;padding:2px 6px;border-radius:999px;background:${badgeColor}22;color:${badgeColor};margin-left:4px;">${badgeText}</span></div>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" ${checked} onchange="toggleSkillState('${safeId}', this.checked)" />
+            <span>Enabled</span>
+          </label>
+        </div>
+        ${sk.description ? `<div style="font-size:12px;color:var(--text-dim);">${sk.description}</div>` : ""}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px;">
+          <div style="font-size:11px;color:var(--text-dim);">${sk.facts_count} facts · ${sk.patterns_count} rules · ${sk.workflows_count} workflows</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="exportSingleSkill('${safeId}')">Export</button>
+            <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="deleteInstalledSkill('${safeId}')">Delete</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function submitSkillPayload(rawObjOrStr) {
+  const box = document.getElementById("skill-status");
+  try {
+    const res = await fetch("/skills/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: activeBrain, skill_data: rawObjOrStr })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Skill import failed");
+    }
+    if (box) {
+      box.className = "status-box ok";
+      box.textContent = data.message || "Skill installed!";
+    }
+    renderSkillsList(data.skills || []);
+    if (typeof refreshState === "function") refreshState();
+    if (typeof showToast === "function") showToast(data.message || "Skill installed!");
+  } catch (e) {
+    if (box) {
+      box.className = "status-box err";
+      box.textContent = "Error: " + e.message;
+    }
+  }
+}
+
+function importSkillFile(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    await submitSkillPayload(String(ev.target.result || ""));
+    event.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
+async function importPastedSkill() {
+  const ta = document.getElementById("skill-json-paste");
+  const raw = (ta ? ta.value : "").trim();
+  if (!raw) {
+    const box = document.getElementById("skill-status");
+    if (box) {
+      box.className = "status-box err";
+      box.textContent = "Paste the Skill JSON from ChatGPT or Gemini first.";
+    }
+    return;
+  }
+  await submitSkillPayload(raw);
+  if (ta) ta.value = "";
+}
+
+async function toggleSkillState(skillId, enabled) {
+  const box = document.getElementById("skill-status");
+  try {
+    const res = await fetch("/skills/toggle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: activeBrain, skill_id: skillId, enabled })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Toggle failed");
+    renderSkillsList(data.skills || []);
+    if (typeof refreshState === "function") refreshState();
+    if (box) {
+      box.className = "status-box ok";
+      box.textContent = enabled ? `Skill '${skillId}' enabled.` : `Skill '${skillId}' turned OFF.`;
+    }
+  } catch (e) {
+    if (box) {
+      box.className = "status-box err";
+      box.textContent = "Error: " + e.message;
+    }
+  }
+}
+
+async function deleteInstalledSkill(skillId) {
+  const box = document.getElementById("skill-status");
+  try {
+    const res = await fetch("/skills/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: activeBrain, skill_id: skillId })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Delete failed");
+    renderSkillsList(data.skills || []);
+    if (typeof refreshState === "function") refreshState();
+    if (box) {
+      box.className = "status-box ok";
+      box.textContent = `Deleted skill '${skillId}'.`;
+    }
+  } catch (e) {
+    if (box) {
+      box.className = "status-box err";
+      box.textContent = "Error: " + e.message;
+    }
+  }
+}
+
+function downloadOrShareJson(jsonStr, fname) {
+  if (window.Android && typeof window.Android.shareBrain === "function") {
+    window.Android.shareBrain(jsonStr, fname);
+    if (typeof showToast === "function") showToast("Sharing skill file...");
+    return;
+  }
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if (typeof showToast === "function") showToast("Exported " + fname);
+}
+
+async function exportSingleSkill(skillId) {
+  const res = await fetch("/skills/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: activeBrain, skill_id: skillId })
+  });
+  const data = await res.json();
+  if (data.ok && data.package) {
+    downloadOrShareJson(JSON.stringify(data.package, null, 2), data.filename || `nsm_skill_${skillId}.json`);
+  }
+}
+
+async function exportAllSkills() {
+  const res = await fetch("/skills/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: activeBrain })
+  });
+  const data = await res.json();
+  if (data.ok && data.package) {
+    downloadOrShareJson(JSON.stringify(data.package, null, 2), data.filename || "nsm_skills_bundle.json");
   }
 }
 

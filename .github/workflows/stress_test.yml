@@ -20,4 +20,4 @@ jobs:
       - name: Install deps
         run: pip install numpy
       - name: Run Stress Tests
-        run: python -m unittest tests.test_stress tests.test_parser_v15 tests.test_v15_e2e -v
+        run: python -m unittest tests.test_stress tests.test_parser_v15 tests.test_v15_e2e tests.test_skills_v15 -v

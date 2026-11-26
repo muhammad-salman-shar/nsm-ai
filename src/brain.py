@@ -14,7 +14,7 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
-from src import cortex_api, realizer
+from src import cortex_api, realizer, skills as skill_engine
 from src.episodic import EpisodicMemory
 from src.hypergraph import TypedHypergraph, normalize_entity, tokenize_content
 from src.parser import CompositionalParser, ParsedQuestion, canon_verb, clean_phrase, is_valid_agent
@@ -980,6 +980,18 @@ class Brain:
         self_res = self._handle_self_query(cleaned)
         if self_res:
             return self._maybe_enhance_with_cortex(cleaned, self_res, llm_url, llm_model, llm_key)
+
+        wf_hit = skill_engine.match_skill_workflow(self, cleaned)
+        if wf_hit:
+            wf_res = self._reply(
+                cleaned,
+                wf_hit["response"],
+                intent="skill_workflow",
+                mode="stored",
+                confidence=wf_hit["confidence"],
+                proof_steps=wf_hit["proof_steps"],
+            )
+            return self._maybe_enhance_with_cortex(cleaned, wf_res, llm_url, llm_model, llm_key)
 
         parsed = self.parser.parse_turn(cleaned, active_topic=self.active_topic)
         learned_frames: List[Dict[str, Any]] = []
