@@ -928,7 +928,9 @@ class Brain:
         ep_hits = self.episodic.recall_similar(cleaned_q, top_k=2, min_score=0.42)
         if ep_hits:
             best_ep, ep_score = ep_hits[0]
-            if best_ep.get("response") and best_ep.get("mode") != "unknown":
+            ep_fids = best_ep.get("recalled_frame_ids") or []
+            frames_still_active = (not ep_fids) or any(fid in self.hypergraph.frames for fid in ep_fids)
+            if frames_still_active and best_ep.get("response") and best_ep.get("mode") != "unknown":
                 ep_tokens = set(tokenize_content(best_ep.get("user_input", "")))
                 if q_tokens.intersection(ep_tokens):
                     return self._reply(

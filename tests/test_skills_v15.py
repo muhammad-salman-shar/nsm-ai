@@ -92,7 +92,11 @@ class TestTeachSkillsV15(unittest.TestCase):
         self.assertTrue(exp["ok"])
         self.assertEqual(exp["package"]["package_type"], "skill_pack")
 
-        # Toggle OFF -> frames & workflow disappear cleanly
+        # Ask once while ON so episode is recorded
+        q_before_off = brain.observe_bulk("What is git stash used for?")
+        self.assertEqual(q_before_off["mode"], "stored")
+
+        # Toggle OFF -> frames, workflow, AND stale episode recall disappear cleanly
         tog_off = skills.toggle_skill(brain, "git_doctor", False)
         self.assertTrue(tog_off["ok"])
         q_off = brain.observe_bulk("What is git stash used for?")

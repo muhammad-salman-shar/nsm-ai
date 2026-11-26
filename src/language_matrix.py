@@ -326,6 +326,14 @@ QUESTION_RULES: List[Dict[str, Any]] = [
 
     # 5. CAPABILITY (CAN / CANNOT)
     {
+        "id": "q_can_verb_en",
+        "qtype": "QUERY_CAN",
+        "lang": "en",
+        "pattern": r"^can\s+(.+?)\s+((?:be|have|do|detect|retake|fly|swim|track|run|work|help|cause|store|use|learn|make|build|create|find|show|give|take|get|keep|send|open|close|read|write|check|handle|support|process|execute|retain|record|generate|calculate|protect|prevent|solve|explain|connect|sync|export|import)\b.*)$",
+        "slots": {"subject": 1, "target": 2},
+        "meta": {"relation": "CAN"},
+    },
+    {
         "id": "q_can_en",
         "qtype": "QUERY_CAN",
         "lang": "en",
