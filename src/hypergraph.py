@@ -473,20 +473,36 @@ class TypedHypergraph:
 
         # Extract meaningful word tokens from the input sentence
         q_words = set(tokenize_content(raw))
-        # Preserve important 2-letter technical/domain words while ignoring glue stopwords
+        # Ignore pronouns and generic filler words so 'us'/'our'/'things' never cause false matches
         glue = {
             "is", "am", "are", "was", "were", "be", "to", "of", "in", "on", "at", "by",
-            "an", "as", "or", "if", "it", "my", "me", "we", "us", "he", "she", "do", "so",
-            "no", "up", "go", "ok", "hi",
+            "an", "as", "or", "if", "it", "its", "my", "me", "mine", "we", "us", "our", "ours",
+            "you", "your", "yours", "they", "them", "their", "theirs", "he", "him", "his",
+            "she", "her", "hers", "do", "does", "did", "so", "no", "up", "go", "ok", "hi",
+            "thing", "things", "something", "anything", "everything", "way", "ways",
+            "lot", "many", "much", "very", "also", "just", "really", "around", "through",
         }
+        q_words = {w for w in q_words if w not in glue}
         for tok in re.findall(r"[a-z0-9]+", raw.lower()):
             if len(tok) == 2 and tok not in glue:
                 q_words.add(tok)
 
         if not q_words:
-            q_words = {tok for tok in re.findall(r"[a-z0-9]+", raw.lower()) if len(tok) >= 2}
+            q_words = {tok for tok in re.findall(r"[a-z0-9]+", raw.lower()) if len(tok) >= 2 and tok not in glue}
         if not q_words:
             return {"mode": "unknown", "tier": "none", "match_pct": 0.0, "frames": [], "used_frame_ids": [], "confidence": 0.0, "proof_steps": []}
+
+        def _tokens_overlap(qw_set: Set[str], mw_set: Set[str]) -> Set[str]:
+            hits = set()
+            for qw in qw_set:
+                if qw in mw_set:
+                    hits.add(qw)
+                elif len(qw) >= 4:
+                    for mw in mw_set:
+                        if len(mw) >= 4 and (qw.startswith(mw) or mw.startswith(qw)):
+                            hits.add(qw)
+                            break
+            return hits
 
         scored: List[Tuple[float, float, Dict[str, Any], str]] = []
         for fr in self.frames.values():
@@ -495,14 +511,14 @@ class TypedHypergraph:
                 continue
             mem_sent = _realizer.frame_to_sentence(fr)
             mem_blob = f"{ag} {fr.get('patient', '')} {mem_sent}"
-            m_words = set(tokenize_content(mem_blob))
+            m_words = {w for w in tokenize_content(mem_blob) if w not in glue}
             for tok in re.findall(r"[a-z0-9]+", mem_blob.lower()):
                 if len(tok) == 2 and tok not in glue:
                     m_words.add(tok)
             if not m_words:
                 continue
 
-            matched = q_words.intersection(m_words)
+            matched = _tokens_overlap(q_words, m_words)
             if not matched:
                 continue
 

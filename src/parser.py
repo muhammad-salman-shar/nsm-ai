@@ -342,6 +342,24 @@ class CompositionalParser:
 
         return None
 
+    def split_comma_clauses(self, sentence: str) -> List[str]:
+        """Split compound comma-separated clauses while preserving lists (A, B, and C) and If-clauses."""
+        s = (sentence or "").strip()
+        if not s or "," not in s:
+            return [s] if s else []
+        if re.match(r"^(?:if|when|unless|whenever)\b", s, re.IGNORECASE):
+            return [s]
+        pieces = [p.strip() for p in re.split(r",\s*(?:and\s+|but\s+|while\s+|whereas\s+)?", s) if p.strip()]
+        if len(pieces) < 2:
+            return [s]
+        # Only split when every piece has >= 3 words and independently parses as a valid statement or question
+        for piece in pieces:
+            if len(piece.split()) < 3:
+                return [s]
+            if self.parse_statement(piece) is None and self.parse_question(piece) is None:
+                return [s]
+        return pieces
+
     def parse_turn(
         self,
         text: str,
@@ -352,7 +370,12 @@ class CompositionalParser:
         if not raw:
             return turn
 
-        parts = [p.strip() for p in _SENTENCE_SPLIT_RE.split(raw) if p.strip()]
+        raw_parts = [p.strip() for p in _SENTENCE_SPLIT_RE.split(raw) if p.strip()]
+        parts: List[str] = []
+        for rp_item in raw_parts:
+            parts.extend(self.split_comma_clauses(rp_item))
+
+        non_it_pronouns = frozenset({"we", "you", "i", "they", "them", "he", "she", "it", "this", "that"})
         running_topic = active_topic
 
         for part in parts:
@@ -379,7 +402,7 @@ class CompositionalParser:
             ps = self.parse_statement(part, last_subject=running_topic)
             if ps:
                 turn.statements.append(ps)
-                if ps.relation != "IF_THEN" and is_valid_agent(ps.agent):
+                if ps.relation != "IF_THEN" and is_valid_agent(ps.agent) and ps.agent.lower() not in non_it_pronouns:
                     running_topic = ps.agent
                 continue
 

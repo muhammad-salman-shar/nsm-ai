@@ -415,7 +415,7 @@ QUESTION_RULES: List[Dict[str, Any]] = [
         "id": "q_role_patient_en",
         "qtype": "QUERY_ROLE",
         "lang": "en",
-        "pattern": r"^(?:who|what)\s+(?:did|does)\s+(.+?)\s+(?!mean\b)([a-zA-Z]+)$",
+        "pattern": r"^(?:who|what)\s+(?:did|does|do)\s+(.+?)\s+(?!mean\b)([a-zA-Z]+)(?:\s+.*)?$",
         "slots": {"subject": 1, "action": 2},
         "meta": {"role_ask": "patient", "relation": "ACTION"},
     },
@@ -687,5 +687,15 @@ STATEMENT_RULES: List[Dict[str, Any]] = [
         "action_g": 2,
         "modifier_g": 2,
         "patient_g": 3,
+    },
+    # 15. GENERAL DECLARATIVE SVO FACT (handles everyday English facts with lists/prepositions)
+    {
+        "id": "s_general_fact_en",
+        "relation": "FACT",
+        "polarity": 1,
+        "pattern": r"^([a-zA-Z][a-zA-Z0-9 '-]{1,35}?)\s+((gives?|gave|needs?|needed|helps?|helped|revolves?|revolved|orbits?|orbited|rotates?|rotated|discovers?|discovered|contains?|contained|includes?|included|produces?|produced|creates?|created|builds?|built|makes?|made|takes?|took|uses?|used|stores?|stored|tracks?|tracked|shows?|showed|provides?|provided|requires?|required|supports?|supported|protects?|protected|prevents?|prevented|reduces?|reduced|increases?|increased|improves?|improved|allows?|allowed|enables?|enabled|controls?|controlled|carries?|carried|pumps?|pumped|absorbs?|absorbed|reflects?|reflected|emits?|emitted|travels?|traveled|grows?|grew|lives?|lived|eats?|ate|drinks?|drank|breathes?|breathed|runs?|ran|works?|worked|keeps?|kept|holds?|held|sends?|sent|receives?|received|converts?|converted|transfers?|transferred|connects?|connected|processes?|processed|executes?|executed|compiles?|compiled|translates?|translated|updates?|updated|deletes?|deleted)\b.+)$",
+        "agent_g": 1,
+        "action_g": 3,
+        "patient_g": 2,
     },
 ]

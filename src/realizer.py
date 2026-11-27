@@ -80,6 +80,8 @@ def frame_to_sentence(fr: Dict[str, Any], lang: str = "english") -> str:
         if mod:
             return f"{ag} is {mod} than {display_entity(pat)}."
         return f"{ag} is compared to {display_entity(pat)}."
+    if rel == "FACT":
+        return f"{ag} {pat}."
     if rel == "ACTION":
         act = mod or fr.get("action") or "acted on"
         return f"{ag} {act} {pat}."
