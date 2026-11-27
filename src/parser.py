@@ -343,18 +343,29 @@ class CompositionalParser:
         return None
 
     def split_comma_clauses(self, sentence: str) -> List[str]:
-        """Split compound comma-separated clauses while preserving lists (A, B, and C) and If-clauses."""
+        """Split compound comma-separated clauses while preserving lists (A, B, and C), If-clauses, and participle/relative clauses."""
         s = (sentence or "").strip()
         if not s or "," not in s:
             return [s] if s else []
-        if re.match(r"^(?:if|when|unless|whenever)\b", s, re.IGNORECASE):
+        if re.match(r"^(?:if|when|unless|whenever|although|because|since|while)\b", s, re.IGNORECASE):
             return [s]
         pieces = [p.strip() for p in re.split(r",\s*(?:and\s+|but\s+|while\s+|whereas\s+)?", s) if p.strip()]
         if len(pieces) < 2:
             return [s]
-        # Only split when every piece has >= 3 words and independently parses as a valid statement or question
-        for piece in pieces:
-            if len(piece.split()) < 3:
+        sub_starters = {
+            "which", "that", "who", "whom", "whose", "where", "when", "while", "whereas",
+            "although", "though", "because", "since", "unless", "until", "including",
+            "such", "meaning", "making", "allowing", "explaining", "providing", "producing",
+            "releasing", "containing", "consisting", "causing", "depending", "giving",
+            "showing", "taking", "pumping", "separating", "combining", "orbiting",
+            "stating", "describing", "representing", "using", "leading", "resulting",
+        }
+        for idx, piece in enumerate(pieces):
+            words = piece.split()
+            if len(words) < 3:
+                return [s]
+            first_w = words[0].lower().strip(".,;:!?")
+            if idx > 0 and (first_w in sub_starters or (len(first_w) > 5 and first_w.endswith("ing"))):
                 return [s]
             if self.parse_statement(piece) is None and self.parse_question(piece) is None:
                 return [s]

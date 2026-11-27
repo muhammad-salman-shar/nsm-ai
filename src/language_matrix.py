@@ -696,12 +696,20 @@ STATEMENT_RULES: List[Dict[str, Any]] = [
         "modifier_g": 2,
         "patient_g": 3,
     },
-    # 15. GENERAL DECLARATIVE SVO FACT (handles everyday English facts with lists/prepositions)
+    # 15. GENERAL DECLARATIVE SVO FACT (handles everyday & scientific English facts + negations)
+    {
+        "id": "s_neg_do_fact_en",
+        "relation": "FACT",
+        "polarity": 1,
+        "pattern": r"^([a-zA-Z][a-zA-Z0-9' -]{1,42}?)\s+((?:does\s+not|do\s+not|did\s+not|doesn't|don't|didn't)\s+[a-zA-Z]+\b.+)$",
+        "agent_g": 1,
+        "patient_g": 2,
+    },
     {
         "id": "s_general_fact_en",
         "relation": "FACT",
         "polarity": 1,
-        "pattern": r"^([a-zA-Z][a-zA-Z0-9 '-]{1,35}?)\s+((gives?|gave|needs?|needed|helps?|helped|revolves?|revolved|orbits?|orbited|rotates?|rotated|discovers?|discovered|contains?|contained|includes?|included|produces?|produced|creates?|created|builds?|built|makes?|made|takes?|took|uses?|used|stores?|stored|tracks?|tracked|shows?|showed|provides?|provided|requires?|required|supports?|supported|protects?|protected|prevents?|prevented|reduces?|reduced|increases?|increased|improves?|improved|allows?|allowed|enables?|enabled|controls?|controlled|carries?|carried|pumps?|pumped|absorbs?|absorbed|reflects?|reflected|emits?|emitted|travels?|traveled|grows?|grew|lives?|lived|eats?|ate|drinks?|drank|breathes?|breathed|runs?|ran|works?|worked|keeps?|kept|holds?|held|sends?|sent|receives?|received|converts?|converted|transfers?|transferred|connects?|connected|processes?|processed|executes?|executed|compiles?|compiled|translates?|translated|updates?|updated|deletes?|deleted)\b.+)$",
+        "pattern": r"^([a-zA-Z][a-zA-Z0-9' -]{1,42}?)\s+((?:(?:generally|naturally|commonly|usually|typically|often|always|never|freely)\s+)?(gives?|gave|needs?|needed|helps?|helped|revolves?|revolved|orbits?|orbited|rotates?|rotated|discovers?|discovered|contains?|contained|includes?|included|produces?|produced|creates?|created|builds?|built|makes?|made|takes?|took|uses?|used|stores?|stored|tracks?|tracked|shows?|showed|provides?|provided|requires?|required|supports?|supported|protects?|protected|prevents?|prevented|reduces?|reduced|increases?|increased|improves?|improved|allows?|allowed|enables?|enabled|controls?|controlled|carries?|carried|pumps?|pumped|absorbs?|absorbed|reflects?|reflected|emits?|emitted|travels?|traveled|grows?|grew|lives?|lived|eats?|ate|drinks?|drank|breathes?|breathed|runs?|ran|works?|worked|keeps?|kept|holds?|held|sends?|sent|receives?|received|converts?|converted|transfers?|transferred|connects?|connected|processes?|processed|executes?|executed|compiles?|compiled|translates?|translated|updates?|updated|deletes?|deleted|remains?|remained|measures?|measured|occurs?|occurred|explains?|explained|states?|stated|accelerates?|accelerated|depends?|depended|conducts?|conducted|happens?|happened|forms?|formed|represents?|represented|opposes?|opposed|attracts?|attracted|repels?|repelled|generates?|generated|occupies?|occupy|occupied|splits?|combines?|combined|covers?|covered|beats?|beat|passes?|passed|changes?|changed|becomes?|became|exists?|existed|possesses?|possessed|delivers?|delivered|releases?|released|detects?|detected|bounces?|bounced|interacts?|interacted|separates?|separated|examines?|examined|drives?|drove|operates?|operated|flows?|flowed|describes?|described|determines?|determined|resists?|resisted|equals?|equaled|pushes?|pushed|pulls?|pulled)\b.+)$",
         "agent_g": 1,
         "action_g": 3,
         "patient_g": 2,

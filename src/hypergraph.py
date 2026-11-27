@@ -458,7 +458,7 @@ class TypedHypergraph:
         min_ref_pct: float = 0.20,
         direct_lift_pct: float = 0.40,
     ) -> Dict[str, Any]:
-        """Treat a full sentence as a token unit and score word-level overlap against stored memory sentences.
+        """Treat a full sentence as a token unit and score IDF-weighted word overlap against stored memory sentences.
 
         Rules:
         - match_pct >= 0.40 (40%+): Direct sentence lift ('direct_lift', mode='stored')
@@ -471,66 +471,97 @@ class TypedHypergraph:
         if not raw:
             return {"mode": "unknown", "tier": "none", "match_pct": 0.0, "frames": [], "used_frame_ids": [], "confidence": 0.0, "proof_steps": []}
 
-        # Extract meaningful word tokens from the input sentence
-        q_words = set(tokenize_content(raw))
-        # Ignore pronouns and generic filler words so 'us'/'our'/'things' never cause false matches
+        # Filter pronouns, prepositions, and generic filler words so 'after'/'us'/'things' never cause false hits
         glue = {
-            "is", "am", "are", "was", "were", "be", "to", "of", "in", "on", "at", "by",
+            "is", "am", "are", "was", "were", "be", "been", "being", "to", "of", "in", "on", "at", "by",
             "an", "as", "or", "if", "it", "its", "my", "me", "mine", "we", "us", "our", "ours",
             "you", "your", "yours", "they", "them", "their", "theirs", "he", "him", "his",
             "she", "her", "hers", "do", "does", "did", "so", "no", "up", "go", "ok", "hi",
-            "thing", "things", "something", "anything", "everything", "way", "ways",
-            "lot", "many", "much", "very", "also", "just", "really", "around", "through",
+            "after", "before", "during", "between", "into", "onto", "upon", "from", "with", "without",
+            "through", "under", "over", "above", "below", "within", "about", "around", "toward", "towards",
+            "most", "some", "many", "much", "more", "less", "other", "different", "certain", "such",
+            "each", "every", "both", "same", "own", "very", "also", "just", "really", "often", "usually",
+            "generally", "commonly", "approximately", "mainly", "especially", "typically",
+            "than", "then", "when", "where", "while", "which", "that", "this", "these", "those",
+            "because", "therefore", "although", "unless", "until", "since", "however",
+            "thing", "things", "something", "anything", "everything", "way", "ways", "lot",
+            "make", "makes", "making", "made", "become", "becomes", "called", "known",
+            "used", "using", "help", "helps", "allow", "allows", "allowing", "explain", "explains",
+            "explaining", "describe", "describes", "mean", "means", "meaning", "affect", "affects",
+            "happen", "happens", "occur", "occurs", "appear", "appears", "remain", "remains",
+            "give", "gives", "take", "takes", "get", "gets", "have", "has", "had", "can", "cannot",
+            "main", "role", "function", "functions", "difference", "relationship", "according",
         }
-        q_words = {w for w in q_words if w not in glue}
-        for tok in re.findall(r"[a-z0-9]+", raw.lower()):
-            if len(tok) == 2 and tok not in glue:
-                q_words.add(tok)
 
+        def _extract_words(text: str) -> Set[str]:
+            ws = {w for w in tokenize_content(text) if w not in glue}
+            for tok in re.findall(r"[a-z0-9]+", (text or "").lower()):
+                if len(tok) == 2 and tok not in glue:
+                    ws.add(tok)
+            return ws
+
+        q_words = _extract_words(raw)
         if not q_words:
             q_words = {tok for tok in re.findall(r"[a-z0-9]+", raw.lower()) if len(tok) >= 2 and tok not in glue}
         if not q_words:
             return {"mode": "unknown", "tier": "none", "match_pct": 0.0, "frames": [], "used_frame_ids": [], "confidence": 0.0, "proof_steps": []}
 
-        def _tokens_overlap(qw_set: Set[str], mw_set: Set[str]) -> Set[str]:
-            hits = set()
-            for qw in qw_set:
-                if qw in mw_set:
-                    hits.add(qw)
-                elif len(qw) >= 4:
-                    for mw in mw_set:
-                        if len(mw) >= 4 and (qw.startswith(mw) or mw.startswith(qw)):
-                            hits.add(qw)
-                            break
-            return hits
-
-        scored: List[Tuple[float, float, Dict[str, Any], str]] = []
+        # Precompute word sets and document frequencies (IDF) so rare domain words outweigh generic words
+        frame_entries: List[Tuple[Dict[str, Any], str, Set[str]]] = []
+        df: Dict[str, int] = {}
         for fr in self.frames.values():
             ag = (fr.get("agent") or "").strip()
             if not ag:
                 continue
             mem_sent = _realizer.frame_to_sentence(fr)
             mem_blob = f"{ag} {fr.get('patient', '')} {mem_sent}"
-            m_words = {w for w in tokenize_content(mem_blob) if w not in glue}
-            for tok in re.findall(r"[a-z0-9]+", mem_blob.lower()):
-                if len(tok) == 2 and tok not in glue:
-                    m_words.add(tok)
+            m_words = _extract_words(mem_blob)
             if not m_words:
                 continue
+            frame_entries.append((fr, mem_sent, m_words))
+            for mw in m_words:
+                df[mw] = df.get(mw, 0) + 1
 
-            matched = _tokens_overlap(q_words, m_words)
-            if not matched:
+        total_docs = max(1, len(frame_entries))
+
+        def _idf(w: str) -> float:
+            return math.log((total_docs + 1.0) / (df.get(w, 0) + 1.0)) + 1.0
+
+        def _match_pairs(qw_set: Set[str], mw_set: Set[str]) -> List[Tuple[str, str]]:
+            pairs: List[Tuple[str, str]] = []
+            for qw in qw_set:
+                if qw in mw_set:
+                    pairs.append((qw, qw))
+                elif len(qw) >= 4:
+                    for mw in mw_set:
+                        if len(mw) >= 4 and abs(len(qw) - len(mw)) <= 4 and (qw.startswith(mw) or mw.startswith(qw)):
+                            pairs.append((qw, mw))
+                            break
+            return pairs
+
+        q_total_w = sum(_idf(w) for w in q_words) or 1.0
+
+        scored: List[Tuple[float, float, Dict[str, Any], str]] = []
+        for fr, mem_sent, m_words in frame_entries:
+            pairs = _match_pairs(q_words, m_words)
+            if not pairs:
                 continue
 
-            input_pct = len(matched) / len(q_words)
-            mem_pct = len(matched) / len(m_words)
-            # Bidirectional coverage when 2+ words match so long queries against concise memories still lift cleanly
-            eff_pct = max(input_pct, 0.85 * mem_pct) if len(matched) >= 2 else input_pct
+            matched_q_w = sum(_idf(qw) for qw, _ in pairs)
+            matched_m_w = sum(_idf(mw) for _, mw in pairs)
+            m_total_w = sum(_idf(w) for w in m_words) or 1.0
+
+            w_input_pct = matched_q_w / q_total_w
+            w_mem_pct = matched_m_w / m_total_w
+            eff_pct = max(w_input_pct, 0.85 * w_mem_pct) if len(pairs) >= 2 else w_input_pct
             eff_pct = min(1.0, round(eff_pct, 4))
 
             if eff_pct >= min_ref_pct:
                 b_conf = self.bayesian_confidence(fr)
-                rank_score = eff_pct + (0.10 * mem_pct) + (0.05 * b_conf)
+                # Reward rare-word overlap + agent match slightly for crisp disambiguation
+                ag_words = _extract_words(fr.get("agent", ""))
+                ag_bonus = 0.08 if _match_pairs(q_words, ag_words) else 0.0
+                rank_score = eff_pct + (0.12 * w_mem_pct) + ag_bonus + (0.04 * b_conf)
                 scored.append((rank_score, eff_pct, fr, mem_sent))
 
         if not scored:
@@ -563,7 +594,6 @@ class TypedHypergraph:
                 ],
             }
 
-        # 20% to 39%: answer from the highest-scoring memory reference(s)
         chosen_frames = [best_fr]
         chosen_ids = [best_fr["id"]]
         proofs = [f"Sentence-token reference match ({pct_label}% >= 20%): '{best_sent}'"]
