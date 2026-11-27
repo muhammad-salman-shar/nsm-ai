@@ -983,8 +983,11 @@ class Brain:
         if self_res:
             return self._maybe_enhance_with_cortex(cleaned, self_res, llm_url, llm_model, llm_key)
 
-        # Split input at full stops / sentence boundaries so each sentence is a discrete token unit
-        sentence_units = [s.strip() for s in re.split(r"(?<=[.!?;\n])\s+|\n+", cleaned) if s.strip()]
+        # Split input at full stops and compound comma clauses while preserving lists & If-clauses
+        raw_units = [s.strip() for s in re.split(r"(?<=[.!?;\n])\s+|\n+", cleaned) if s.strip()]
+        sentence_units: List[str] = []
+        for ru in raw_units:
+            sentence_units.extend(self.parser.split_comma_clauses(ru))
 
         # MULTI-SENTENCE MODE (2+ sentences): filter each sentence one by one against memory
         if len(sentence_units) >= 2:
@@ -1023,7 +1026,7 @@ class Brain:
                             )
                             learned_frames.append(fr)
                             learned_summaries.append(realizer.frame_to_sentence(fr))
-                            if ps.relation != "IF_THEN":
+                            if ps.relation != "IF_THEN" and fr["agent"] not in {"we", "you", "i", "they", "them", "he", "she", "it", "this", "that"}:
                                 self.active_topic = fr["agent"]
                             continue
                         except ValueError as ve:
@@ -1152,7 +1155,7 @@ class Brain:
                 )
                 learned_frames.append(fr)
                 learned_summaries.append(realizer.frame_to_sentence(fr))
-                if st.relation != "IF_THEN":
+                if st.relation != "IF_THEN" and fr["agent"] not in {"we", "you", "i", "they", "them", "he", "she", "it", "this", "that"}:
                     self.active_topic = fr["agent"]
             except ValueError as ve:
                 rejected_notes.append(str(ve))
